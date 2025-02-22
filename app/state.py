@@ -445,12 +445,15 @@ class State(rx.State):
                 # Set as current project
                 self.current_project_id = project.id
 
-        # Close modal and reload
+        # Update modal state directly so that it closes immediately.
+        self.show_project_modal = False
+
+        # Clear form data and reload projects/chats
         self.clear_project_form()
         self.load_project_chats()
         self.load_projects()
 
-        # Only redirect if creating new project
+        # Redirect appropriately
         if not was_editing:
             return rx.redirect(f"/projects/{project.id}")
         else:

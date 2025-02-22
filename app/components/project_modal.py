@@ -150,11 +150,9 @@ def project_modal() -> rx.Component:
                                     color_scheme="gray",
                                 ),
                             ),
-                            rx.dialog.close(
-                                rx.button(
-                                    "Done",
-                                    type="submit",
-                                ),
+                            rx.button(
+                                "Done",
+                                type="submit",
                             ),
                             spacing="3",
                             justify="end",
