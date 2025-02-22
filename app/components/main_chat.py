@@ -44,6 +44,7 @@ def main_chat() -> rx.Component:
                 rx.button("Send", on_click=State.send_message),
                 padding="1rem",
                 border_top="1px solid rgb(229, 231, 235)",
+                width="100%",
             ),
             height="100%",
             overflow="hidden",

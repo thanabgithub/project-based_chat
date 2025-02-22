@@ -19,9 +19,8 @@ def index() -> rx.Component:
             rx.hstack(
                 # Main chat area
                 main_chat(),
-                # Knowledge base (collapsible)
-                knowledge_base(),
                 height="100%",
+                width="100%",
                 flex="1",
                 overflow="hidden",
             ),
@@ -30,11 +29,16 @@ def index() -> rx.Component:
             overflow="hidden",
         ),
         # Modal for creating new projects
-        project_modal(),
         style=base_style,
     )
 
 
 # Create the app
-app = rx.App()
+app = rx.App(
+    theme=rx.theme(
+        appearance="light",
+        accent_color="gray",
+        radius="medium",
+    )
+)
 app.add_page(index)
