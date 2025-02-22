@@ -4,6 +4,27 @@ from sqlmodel import Column, DateTime, Field, func, Relationship
 
 import reflex as rx
 
+"""
+**Primary Key**
+
+Yes, by default Reflex will create a primary key column called `id` for each table.  [(1)](https://reflex.dev/docs/database/tables/) 
+
+Here's how it works:
+- When you create a table by inheriting from `rx.Model`, an `id` field is automatically added as the primary key 
+- This behavior applies to all database backends, including SQLite 
+- If you define a different field with `primary_key=True`, then the default `id` field will not be created 
+
+For example, here's a basic table definition that will automatically include an id column:
+
+```python
+class User(rx.Model, table=True):
+    username: str
+    email: str
+```
+
+Note that it's currently not possible to create a table without a primary key in Reflex. 
+"""
+
 
 class Message(rx.Model, table=True):
     """A chat message."""
