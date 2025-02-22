@@ -776,7 +776,7 @@ class State(rx.State):
 
         try:
             # Initialize API client
-            client = AsyncOpenAI(
+            client = AsyncOpenRouterAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=os.getenv("OPENROUTER_API_KEY"),
             )
