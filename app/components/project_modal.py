@@ -2,18 +2,6 @@ import reflex as rx
 from app.state import State
 
 
-def show_document(doc):
-    return rx.hstack(
-        rx.icon("file-text"),
-        rx.text(doc.name),
-        rx.spacer(),
-        rx.button(
-            rx.icon("delete"), on_click=State.delete_document(doc.id), variant="ghost"
-        ),
-        width="100%",
-    )
-
-
 def project_modal() -> rx.Component:
     """The project modal component - handles both create and edit."""
     return rx.dialog.root(
@@ -33,7 +21,6 @@ def project_modal() -> rx.Component:
                             ),
                             required=True,
                             on_change=State.set_project_name,
-                            default_value=State.project_name,
                         ),
                         rx.text_area(
                             placeholder="Project Description",
@@ -62,7 +49,12 @@ def project_modal() -> rx.Component:
                             rx.cond(
                                 State.project_to_edit_data,
                                 rx.foreach(
-                                    State.project_to_edit_data.knowledge,
+                                    # Add the doc_list_version to force re-render
+                                    rx.cond(
+                                        State.doc_list_version > 0,
+                                        State.project_to_edit_data.knowledge,
+                                        State.project_to_edit_data.knowledge,
+                                    ),
                                     lambda doc: rx.hstack(
                                         rx.icon("file-text"),
                                         rx.text(doc.name),
@@ -87,41 +79,41 @@ def project_modal() -> rx.Component:
                                 rx.dialog.content(
                                     rx.dialog.title("Add Document"),
                                     rx.dialog.description(
-                                        rx.form(
-                                            rx.flex(
-                                                rx.input(
-                                                    placeholder="Document Name",
-                                                    name="name",
-                                                    required=True,
-                                                ),
-                                                rx.text_area(
-                                                    placeholder="Document Content",
-                                                    name="content",
-                                                    height="200px",
-                                                ),
-                                                rx.flex(
-                                                    rx.dialog.close(
-                                                        rx.button(
-                                                            "Cancel",
-                                                            variant="soft",
-                                                            color_scheme="gray",
-                                                        ),
-                                                    ),
-                                                    rx.dialog.close(
-                                                        rx.button(
-                                                            "Add",
-                                                            type="submit",
-                                                        ),
-                                                    ),
-                                                    spacing="3",
-                                                    justify="end",
-                                                ),
-                                                direction="column",
-                                                spacing="4",
+                                        rx.flex(
+                                            rx.input(
+                                                value=State.document_name,
+                                                on_change=State.set_document_name,
+                                                placeholder="Document Name",
+                                                name="name",
+                                                required=True,
                                             ),
-                                            on_submit=State.handle_document_submit,
-                                            reset_on_submit=True,
-                                        ),
+                                            rx.text_area(
+                                                value=State.document_content,
+                                                on_change=State.set_document_content,
+                                                placeholder="Document Content",
+                                                name="content",
+                                                height="200px",
+                                            ),
+                                            rx.flex(
+                                                rx.dialog.close(
+                                                    rx.button(
+                                                        "Cancel",
+                                                        variant="soft",
+                                                        color_scheme="gray",
+                                                    ),
+                                                ),
+                                                rx.dialog.close(
+                                                    rx.button(
+                                                        "Add",
+                                                        on_click=State.handle_document_submit,
+                                                    ),
+                                                ),
+                                                spacing="3",
+                                                justify="end",
+                                            ),
+                                            direction="column",
+                                            spacing="4",
+                                        )
                                     ),
                                     max_width="450px",
                                 ),
@@ -151,7 +143,7 @@ def project_modal() -> rx.Component:
                         spacing="4",
                     ),
                     on_submit=State.handle_project_submit,
-                    reset_on_submit=True,
+                    reset_on_submit=False,
                 ),
             ),
             max_width="450px",
