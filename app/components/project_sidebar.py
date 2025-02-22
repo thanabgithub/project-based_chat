@@ -12,6 +12,55 @@ project_sidebar_style = {
 }
 
 
+def project_button(p: rx.Var) -> rx.Component:
+    return rx.context_menu.root(
+        rx.context_menu.trigger(
+            rx.link(
+                rx.button(
+                    rx.hstack(
+                        rx.icon(
+                            "folder",
+                            size=20,
+                        ),
+                        rx.text(p.name),
+                        width="100%",
+                    ),
+                    style=[
+                        button_base_style,
+                        {
+                            "width": "100%",
+                            "color": "white",
+                            "_hover": {"background_color": "rgb(55, 65, 81)"},
+                            "background_color": rx.cond(
+                                p.id == State.current_project_id,
+                                "rgb(55, 65, 81)",
+                                "transparent",
+                            ),
+                        },
+                    ],
+                ),
+                href=f"/projects/{p.id}",
+                width="100%",
+            ),
+        ),
+        rx.context_menu.content(
+            rx.context_menu.item(
+                "Edit",
+                on_click=[
+                    lambda: State.set_project_to_edit(p.id),
+                    State.toggle_project_modal,
+                ],
+            ),
+            rx.context_menu.separator(),
+            rx.context_menu.item(
+                "Delete",
+                color_scheme="red",
+                on_click=lambda: State.delete_project(p.id),
+            ),
+        ),
+    )
+
+
 def project_sidebar() -> rx.Component:
     """The project sidebar component."""
     return rx.box(
@@ -29,33 +78,7 @@ def project_sidebar() -> rx.Component:
         rx.vstack(
             rx.foreach(
                 State.projects,
-                lambda p: rx.link(
-                    rx.button(
-                        rx.hstack(
-                            rx.icon(
-                                "folder",
-                                size=20,
-                            ),
-                            rx.text(p.name),
-                            width="100%",
-                        ),
-                        style=[
-                            button_base_style,
-                            {
-                                "width": "100%",
-                                "color": "white",
-                                "_hover": {"background_color": "rgb(55, 65, 81)"},
-                                "background_color": rx.cond(
-                                    p.id == State.current_project_id,
-                                    "rgb(55, 65, 81)",
-                                    "transparent",
-                                ),
-                            },
-                        ],
-                    ),
-                    href=f"/projects/{p.id}",
-                    width="100%",
-                ),
+                project_button,
             ),
             width="100%",
             height="100%",

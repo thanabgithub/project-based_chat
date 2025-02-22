@@ -77,7 +77,9 @@ class Chat(rx.Model, table=True):
     )
 
     # Define relationships
-    messages: List[Message] = Relationship(back_populates="chat")
+    messages: List[Message] = Relationship(
+        back_populates="chat", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     project: "Project" = Relationship(back_populates="chats")
 
 
@@ -132,6 +134,12 @@ class Project(rx.Model, table=True):
         ),
     )
 
-    # Define relationships
-    knowledge: List[Document] = Relationship(back_populates="project")
-    chats: List[Chat] = Relationship(back_populates="project")
+    # Define relationships with cascade delete
+    knowledge: List[Document] = Relationship(
+        back_populates="project",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    chats: List[Chat] = Relationship(
+        back_populates="project",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )

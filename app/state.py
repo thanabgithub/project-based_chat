@@ -219,3 +219,100 @@ class State(rx.State):
                 session.delete(document)
                 session.commit()
                 # Could add toast or other notification here
+
+    # Project modal state
+    show_project_modal: bool = False
+    project_to_edit: Optional[int] = None
+
+    @rx.var
+    def project_modal_title(self) -> str:
+        """Get the title for the project modal."""
+        return "Edit Project" if self.project_to_edit else "New Project"
+
+    @rx.var
+    def project_to_edit_data(self) -> Optional[Project]:
+        """Get the project being edited."""
+        if self.project_to_edit is None:
+            return None
+        with rx.session() as session:
+            return session.get(Project, self.project_to_edit)
+
+    def toggle_project_modal(self):
+        """Toggle the project modal."""
+        self.show_project_modal = not self.show_project_modal
+        if not self.show_project_modal:
+            # Clear edit state when closing
+            self.project_to_edit = None
+
+    @rx.event
+    def set_show_project_modal(self, show: bool):
+        """Set modal visibility directly."""
+        self.show_project_modal = show
+        if not show:
+            # Clear edit state when closing
+            self.project_to_edit = None
+
+    @rx.event
+    async def handle_project_submit(self, form_data: dict):
+        """Handle project form submission - create or edit."""
+        with rx.session() as session:
+            if self.project_to_edit:
+                # Edit existing project
+                project = session.get(Project, self.project_to_edit)
+                if project:
+                    project.name = form_data["name"]
+                    project.description = form_data.get("description", "")
+                    project.system_instructions = form_data.get(
+                        "system_instructions", ""
+                    )
+                    project.updated_at = datetime.now(timezone.utc)
+                    session.add(project)
+                    session.commit()
+                    # Update current project if editing current
+                    if self.current_project_id == project.id:
+                        self.current_project_id = project.id
+            else:
+                # Create new project
+                project = Project(
+                    name=form_data["name"],
+                    description=form_data.get("description", ""),
+                    system_instructions=form_data.get("system_instructions", ""),
+                )
+                session.add(project)
+                session.commit()
+                session.refresh(project)
+                # Set as current project
+                self.current_project_id = project.id
+
+        # Close modal and reload
+        self.show_project_modal = False
+        self.project_to_edit = None
+        self.load_project_chats()
+        self.load_projects()
+
+        # Redirect if creating new
+        if not self.project_to_edit:
+            return rx.redirect(f"/projects/{project.id}")
+
+    @rx.event
+    async def delete_project(self, project_id: int):
+        """Delete a project."""
+        with rx.session() as session:
+            project = session.get(Project, project_id)
+            if project:
+                session.delete(project)
+                session.commit()
+
+        # Clear current if deleted
+        if project_id == self.current_project_id:
+            self.current_project_id = None
+            self.current_chat_id = None
+
+        # Reload and redirect
+        self.load_projects()
+        return rx.redirect("/projects")
+
+    @rx.event
+    async def set_project_to_edit(self, project_id: int):
+        """Set which project to edit."""
+        self.project_to_edit = project_id

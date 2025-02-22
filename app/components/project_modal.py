@@ -3,25 +3,40 @@ from app.state import State
 
 
 def project_modal() -> rx.Component:
-    """The new project modal component."""
+    """The project modal component - handles both create and edit."""
     return rx.dialog.root(
         rx.dialog.content(
-            rx.dialog.title("New Project"),
+            rx.dialog.title(State.project_modal_title),
             rx.dialog.description(
                 rx.form(
                     rx.flex(
                         rx.input(
                             placeholder="Project Name",
                             name="name",
+                            value=rx.cond(
+                                State.project_to_edit_data,
+                                State.project_to_edit_data.name,
+                                "",
+                            ),
                             required=True,
                         ),
                         rx.text_area(
                             placeholder="Project Description",
                             name="description",
+                            value=rx.cond(
+                                State.project_to_edit_data,
+                                State.project_to_edit_data.description,
+                                "",
+                            ),
                         ),
                         rx.text_area(
                             placeholder="System Instructions",
                             name="system_instructions",
+                            value=rx.cond(
+                                State.project_to_edit_data,
+                                State.project_to_edit_data.system_instructions,
+                                "",
+                            ),
                         ),
                         rx.flex(
                             rx.dialog.close(
@@ -33,7 +48,7 @@ def project_modal() -> rx.Component:
                             ),
                             rx.dialog.close(
                                 rx.button(
-                                    "Create",
+                                    "Done",
                                     type="submit",
                                 ),
                             ),
@@ -43,14 +58,12 @@ def project_modal() -> rx.Component:
                         direction="column",
                         spacing="4",
                     ),
-                    on_submit=State.create_project,
+                    on_submit=State.handle_project_submit,
                     reset_on_submit=True,
                 ),
             ),
             max_width="450px",
         ),
-        # Use show_project_modal to control visibility
         open=State.show_project_modal,
-        # Use set_show_project_modal to handle modal open/close
         on_open_change=State.set_show_project_modal,
     )
