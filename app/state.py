@@ -90,6 +90,13 @@ class State(rx.State):
         """Toggle the project modal."""
         self.show_project_modal = not self.show_project_modal
 
+    def clear_project_form(self):
+        """Clear all project form data."""
+        self.project_name = ""
+        self.project_description = ""
+        self.project_system_instructions = ""
+        self.pending_documents = []
+
     @rx.event
     def toggle_chat_modal(self):
         """Toggle the chat modal."""
@@ -235,26 +242,18 @@ class State(rx.State):
             )
             return session.exec(statement).first()
 
-    def toggle_project_modal(self):
-        """Toggle the project modal."""
-        self.show_project_modal = not self.show_project_modal
-        # if not self.show_project_modal:
-        #     # Clear edit state when closing
-        #     self.project_to_edit = None
-
     @rx.event
     def set_show_project_modal(self, show: bool):
         """Set modal visibility directly."""
         self.show_project_modal = show
-        # if not show:
-        #     # Clear edit state when closing
-        #     self.project_to_edit = None
 
     @rx.event
     def handle_project_submit(self, form_data: dict):
         """Handle project form submission - create or edit."""
-        print(self.project_to_edit)
         with rx.session() as session:
+            was_editing = self.project_to_edit  # Store edit state
+            project_id = self.project_to_edit  # Store project id being edited
+
             if self.project_to_edit:
                 # Edit existing project
                 project = session.get(Project, self.project_to_edit)
@@ -285,13 +284,15 @@ class State(rx.State):
 
         # Close modal and reload
         self.show_project_modal = False
-        self.project_to_edit = None
+        self.project_to_edit = None  # Clear edit state after handling submit
         self.load_project_chats()
         self.load_projects()
 
-        # Redirect if creating new
-        if not self.project_to_edit:
+        # Only redirect if creating new project
+        if not was_editing:
             return rx.redirect(f"/projects/{project.id}")
+        else:
+            return rx.redirect(f"/projects/{project_id}")
 
     @rx.event
     async def delete_project(self, project_id: int):
