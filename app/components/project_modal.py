@@ -1,17 +1,10 @@
 import reflex as rx
 from app.state import State
-from app.styles import modal_style
 
 
 def project_modal() -> rx.Component:
     """The new project modal component."""
     return rx.dialog.root(
-        rx.dialog.trigger(
-            rx.button(
-                rx.icon("plus"),
-                rx.text("New Project", size="4"),
-            ),
-        ),
         rx.dialog.content(
             rx.dialog.title("New Project"),
             rx.dialog.description(
@@ -54,6 +47,10 @@ def project_modal() -> rx.Component:
                     reset_on_submit=True,
                 ),
             ),
-            style=modal_style,
+            max_width="450px",
         ),
+        # Use show_project_modal to control visibility
+        open=State.show_project_modal,
+        # Use set_show_project_modal to handle modal open/close
+        on_open_change=State.set_show_project_modal,
     )

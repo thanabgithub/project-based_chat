@@ -1,6 +1,7 @@
 import reflex as rx
 from app.state import State
 from app.styles import project_sidebar_style, button_style, selected_button_style
+from app.components.project_modal import project_modal
 
 
 def project_sidebar() -> rx.Component:
@@ -26,7 +27,6 @@ def project_sidebar() -> rx.Component:
                         width="100%",
                     ),
                     on_click=lambda: State.select_project(p.id),
-                    # Use rx.cond instead of Python if/else
                     style=rx.cond(
                         p.id == State.current_project_id,
                         selected_button_style,
@@ -39,13 +39,7 @@ def project_sidebar() -> rx.Component:
             overflow="auto",
             flex="1",
         ),
-        rx.button(
-            rx.hstack(
-                rx.icon("settings"),
-                rx.text("Settings"),
-                width="100%",
-            ),
-            style=button_style,
-        ),
+        # Add the modal component
+        project_modal(),
         style=project_sidebar_style,
     )

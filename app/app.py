@@ -13,6 +13,8 @@ from app.styles import base_style
 def index() -> rx.Component:
     """The main page."""
     return rx.box(
+        # Add the modal here at the root level
+        project_modal(),
         rx.hstack(
             # Left sidebar - Projects
             project_sidebar(),
@@ -31,7 +33,6 @@ def index() -> rx.Component:
             height="100vh",
             overflow="hidden",
         ),
-        # Modal for creating new projects
         style=base_style,
     )
 

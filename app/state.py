@@ -5,35 +5,25 @@ from sqlmodel import select
 
 import reflex as rx
 
-from .models import Project, Document
+from .models import Project
 
 
 class State(rx.State):
     """The app state."""
 
-    # Initialize projects as empty list
+    # Project state
     _projects: List[Project] = []
-
-    # Currently selected project/chat
     current_project_id: Optional[int] = None
-    current_chat_id: Optional[int] = None
 
     # UI state
     show_project_modal: bool = False
     show_knowledge_base: bool = False
     message: str = ""
-    chat_messages: List[str] = []
 
     @rx.var
     def projects(self) -> List[Project]:
         """Get list of all projects."""
         return self._projects
-
-    @rx.event
-    def load_projects(self):
-        """Load all projects from the database."""
-        with rx.session() as session:
-            self._projects = session.exec(select(Project)).all()
 
     @rx.var
     def current_project(self) -> Optional[Project]:
@@ -44,16 +34,20 @@ class State(rx.State):
             return session.get(Project, self.current_project_id)
 
     @rx.event
-    def send_message(self):
-        """Send a chat message."""
-        if self.message.strip():
-            self.chat_messages.append(self.message)
-            self.message = ""
+    def load_projects(self):
+        """Load all projects from the database."""
+        with rx.session() as session:
+            self._projects = session.exec(select(Project)).all()
 
     @rx.event
     def toggle_project_modal(self):
-        """Toggle the new project modal."""
+        """Toggle the project modal."""
         self.show_project_modal = not self.show_project_modal
+
+    @rx.event
+    def set_show_project_modal(self, show: bool):
+        """Set modal visibility directly."""
+        self.show_project_modal = show
 
     @rx.event
     def toggle_knowledge_base(self):
@@ -61,15 +55,17 @@ class State(rx.State):
         self.show_knowledge_base = not self.show_knowledge_base
 
     @rx.event
-    def select_project(self, project_id: int):
-        """Select a project."""
-        self.current_project_id = project_id
-        self.current_chat_id = None
+    def send_message(self):
+        """Send a chat message."""
+        if self.message.strip():
+            # Logic for sending message would go here
+            self.message = ""  # Clear the input
 
     @rx.event
     def create_project(self, form_data: dict):
         """Create a new project."""
         with rx.session() as session:
+            # Create new project
             project = Project(
                 name=form_data["name"],
                 description=form_data.get("description", ""),
@@ -78,38 +74,16 @@ class State(rx.State):
             session.add(project)
             session.commit()
             session.refresh(project)
+
+            # Update current project
             self.current_project_id = project.id
 
+        # Close modal and reload projects
         self.show_project_modal = False
-        # Reload projects after creating new one
-        return self.load_projects
+        # Use State.load_projects instead of self.load_projects
+        return State.load_projects
 
     @rx.event
-    async def upload_document(self, files: List[rx.UploadFile]):
-        """Upload a document to the current project."""
-        if not self.current_project:
-            return
-
-        with rx.session() as session:
-            for file in files:
-                # Read the file content
-                content = await file.read()
-                content_str = content.decode("utf-8")
-
-                doc = Document(
-                    name=file.filename,
-                    type=file.content_type,
-                    content=content_str,
-                    project_id=self.current_project_id,
-                )
-                session.add(doc)
-            session.commit()
-
-    @rx.event
-    def delete_document(self, doc_id: int):
-        """Delete a document from the current project."""
-        with rx.session() as session:
-            doc = session.get(Document, doc_id)
-            if doc:
-                session.delete(doc)
-                session.commit()
+    def select_project(self, project_id: int):
+        """Select a project."""
+        self.current_project_id = project_id
