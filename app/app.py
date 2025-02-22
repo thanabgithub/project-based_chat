@@ -38,13 +38,22 @@ def index() -> rx.Component:
     )
 
 
+style = {
+    rx.button: {
+        "padding": "0.5rem 1rem",
+        "border_radius": "0.375rem",
+        "text_align": "left",
+        "background_color": "transparent",
+    }
+}
 # Create the app
 app = rx.App(
     theme=rx.theme(
         appearance="light",
         accent_color="gray",
         radius="medium",
-    )
+    ),
+    style=style,
 )
 
 # Add page and load projects on page load

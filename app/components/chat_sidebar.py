@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.styles import sidebar_style, button_base_style
+from app.styles import sidebar_style
 from app.components.chat_modal import chat_modal
 
 chat_sidebar_style = {
@@ -17,7 +17,7 @@ def chat_sidebar() -> rx.Component:
             rx.hstack(
                 rx.heading("Chats", size="4"),
                 rx.button(
-                    rx.icon("plus"),
+                    rx.icon("plus", color="black"),
                     on_click=State.toggle_chat_modal,
                     # Only enable if project is selected
                     is_disabled=rx.cond(State.current_project_id == None, True, False),
@@ -38,7 +38,6 @@ def chat_sidebar() -> rx.Component:
                         ),
                         on_click=lambda: State.select_chat(chat.id),
                         style={
-                            **button_base_style,
                             "color": "black",
                             "_hover": {
                                 "background_color": "rgb(229, 231, 235)"

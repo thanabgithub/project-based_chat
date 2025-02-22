@@ -14,16 +14,6 @@ sidebar_style = {
 }
 
 
-# Common button base style
-button_base_style = {
-    "width": "100%",
-    "padding": "0.5rem 1rem",
-    "border_radius": "0.375rem",
-    "text_align": "left",
-    "background_color": "transparent",
-}
-
-
 # Modal styles
 modal_style = {
     "padding": "2rem",
