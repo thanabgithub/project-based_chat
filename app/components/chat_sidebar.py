@@ -1,3 +1,5 @@
+"""Chat sidebar component."""
+
 import reflex as rx
 from app.state import State
 from app.styles import sidebar_style
@@ -19,7 +21,6 @@ def chat_sidebar() -> rx.Component:
                 rx.button(
                     rx.icon("plus", color="black"),
                     on_click=State.toggle_chat_modal,
-                    # Only enable if project is selected
                     is_disabled=rx.cond(State.current_project_id == None, True, False),
                 ),
                 justify="between",
@@ -30,24 +31,24 @@ def chat_sidebar() -> rx.Component:
             rx.vstack(
                 rx.foreach(
                     State.project_chats,
-                    lambda chat: rx.button(
-                        rx.hstack(
-                            rx.icon("message-square"),
-                            rx.text(chat.name),
-                            width="100%",
-                        ),
-                        on_click=lambda: State.select_chat(chat.id),
-                        style={
-                            "color": "black",
-                            "_hover": {
-                                "background_color": "rgb(229, 231, 235)"
-                            },  # bg-gray-200
-                            "background_color": rx.cond(
-                                chat.id == State.current_chat_id,
-                                "rgb(229, 231, 235)",  # bg-gray-200
-                                "transparent",
+                    lambda chat: rx.link(
+                        rx.button(
+                            rx.hstack(
+                                rx.icon("message-square"),
+                                rx.text(chat.name),
+                                width="100%",
                             ),
-                        },
+                            style={
+                                "color": "black",
+                                "_hover": {"background_color": "rgb(229, 231, 235)"},
+                                "background_color": rx.cond(
+                                    chat.id == State.current_chat_id,
+                                    "rgb(229, 231, 235)",
+                                    "transparent",
+                                ),
+                            },
+                        ),
+                        href=f"/projects/{State.current_project_id}/chats/{chat.id}",
                     ),
                 ),
                 width="100%",
@@ -57,7 +58,6 @@ def chat_sidebar() -> rx.Component:
             width="100%",
             height="100%",
         ),
-        # Add chat modal
         chat_modal(),
         style=chat_sidebar_style,
     )

@@ -1,3 +1,5 @@
+"""Project sidebar component."""
+
 import reflex as rx
 from app.state import State
 from app.styles import sidebar_style
@@ -26,32 +28,32 @@ def project_sidebar() -> rx.Component:
         rx.vstack(
             rx.foreach(
                 State.projects,
-                lambda p: rx.button(
-                    rx.hstack(
-                        rx.icon("folder"),
-                        rx.text(p.name),
-                        width="100%",
-                    ),
-                    on_click=lambda: State.select_project(p.id),
-                    style={
-                        "color": "white",
-                        "_hover": {
-                            "background_color": "rgb(55, 65, 81)"
-                        },  # bg-gray-700
-                        "background_color": rx.cond(
-                            p.id == State.current_project_id,
-                            "rgb(55, 65, 81)",
-                            "transparent",
+                lambda p: rx.link(
+                    rx.button(
+                        rx.hstack(
+                            rx.icon("folder"),
+                            rx.text(p.name),
+                            width="100%",
                         ),
-                    },
+                        style={
+                            "color": "white",
+                            "_hover": {"background_color": "rgb(55, 65, 81)"},
+                            "background_color": rx.cond(
+                                p.id == State.current_project_id,
+                                "rgb(55, 65, 81)",
+                                "transparent",
+                            ),
+                        },
+                    ),
+                    href=f"/projects/{p.id}",
                 ),
             ),
             width="100%",
+            height="100%",
             spacing="4",
             overflow="auto",
             flex="1",
         ),
-        # Add the modal component
         project_modal(),
         style=project_sidebar_style,
     )

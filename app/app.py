@@ -1,34 +1,37 @@
 """Main app module."""
 
 import reflex as rx
+from app.state import State
+from app.styles import base_style
+
+# Components
 from app.components.project_sidebar import project_sidebar
 from app.components.chat_sidebar import chat_sidebar
 from app.components.main_chat import main_chat
 from app.components.project_modal import project_modal
-from app.components.knowledge_base import knowledge_base
-from app.components.chat_modal import chat_modal
-from app.state import State
-from app.styles import base_style
 
 
 def index() -> rx.Component:
-    """The main page."""
+    """Index page that redirects to projects."""
+    # Return empty box but trigger navigation on mount
     return rx.box(
-        # Add the modal here at the root level
+        on_mount=lambda: rx.call_script(f"window.location.href = '/projects'")
+    )
+
+
+def projects() -> rx.Component:
+    """Projects page - shows all projects."""
+    return rx.box(
         project_modal(),
         rx.hstack(
-            # Left sidebar - Projects
             project_sidebar(),
-            # Middle sidebar - Chats
-            chat_sidebar(),
-            # Right area - Chat and Knowledge Base
-            rx.hstack(
-                # Main chat area
-                main_chat(),
-                height="100%",
+            rx.vstack(
+                rx.heading("Select a Project", size="3", padding="1rem"),
+                rx.text("Choose a project from the sidebar to begin."),
                 width="100%",
-                flex="1",
-                overflow="hidden",
+                height="100%",
+                justify="center",
+                align="center",
             ),
             spacing="0",
             height="100vh",
@@ -38,23 +41,70 @@ def index() -> rx.Component:
     )
 
 
-style = {
-    rx.button: {
-        "padding": "0.5rem 1rem",
-        "border_radius": "0.375rem",
-        "text_align": "left",
-        "background_color": "transparent",
-    }
-}
-# Create the app
+def project_chats() -> rx.Component:
+    """Project chats page - shows project's chats."""
+    return rx.box(
+        project_modal(),
+        rx.hstack(
+            project_sidebar(),
+            chat_sidebar(),
+            rx.vstack(
+                rx.heading("Select a Chat", size="3", padding="1rem"),
+                rx.text("Choose a chat from the sidebar to begin."),
+                width="100%",
+                height="100%",
+                justify="center",
+                align="center",
+            ),
+            spacing="0",
+            height="100vh",
+            overflow="hidden",
+        ),
+        style=base_style,
+    )
+
+
+def chat_view() -> rx.Component:
+    """Individual chat view."""
+    return rx.box(
+        project_modal(),
+        rx.hstack(
+            project_sidebar(),
+            chat_sidebar(),
+            main_chat(),
+            spacing="0",
+            height="100vh",
+            overflow="hidden",
+        ),
+        style=base_style,
+    )
+
+
+# Create app and add pages
 app = rx.App(
+    style={
+        "button": {
+            "padding": "0.5rem 1rem",
+            "border_radius": "0.375rem",
+            "text_align": "left",
+            "background_color": "transparent",
+        }
+    },
     theme=rx.theme(
         appearance="light",
         accent_color="gray",
         radius="medium",
     ),
-    style=style,
 )
 
-# Add page and load projects on page load
-app.add_page(index, on_load=State.load_projects)
+# Add routes
+app.add_page(index)
+app.add_page(projects, route="/projects", on_load=State.load_projects)
+app.add_page(
+    project_chats, route="/projects/[project_id]", on_load=State.handle_project_route
+)
+app.add_page(
+    chat_view,
+    route="/projects/[project_id]/chats/[chat_id]",
+    on_load=State.handle_chat_route,
+)
