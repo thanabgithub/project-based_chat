@@ -221,7 +221,10 @@ class State(rx.State):
     @rx.var
     def project_to_edit_data(self) -> Optional[Project]:
         """Get the project being edited with its knowledge documents eagerly loaded."""
-        _ = self.doc_list_version  # Adding a dependency to force recomputation
+
+        # Adding a dependency to force recomputation. This enables re-render after uploading a new document
+        _ = self.doc_list_version
+
         if self.project_to_edit is None:
             return None
         with rx.session() as session:
