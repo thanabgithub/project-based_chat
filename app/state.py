@@ -480,3 +480,94 @@ class State(rx.State):
         # Reload and redirect to project
         self.load_project_chats()
         return rx.redirect(f"/projects/{self.current_project_id}")
+
+    @rx.event
+    async def handle_document_submit(self, form_data: dict):
+        """Handle document form submission."""
+        with rx.session() as session:
+            if self.project_to_edit:
+                # Add document to existing project
+                project = session.get(Project, self.project_to_edit)
+                if project:
+                    document = Document(
+                        name=form_data["name"],
+                        content=form_data.get("content", ""),
+                        type="text",  # Automatically set type to text
+                        project_id=project.id,
+                    )
+                    session.add(document)
+                    session.commit()
+
+            else:
+                # Store document data to be added when project is created
+                self.pending_documents.append(
+                    {
+                        "name": form_data["name"],
+                        "content": form_data.get("content", ""),
+                        "type": "text",
+                    }
+                )
+
+    async def handle_project_submit(self, form_data: dict):
+        """Handle project form submission - create or edit."""
+        with rx.session() as session:
+            if self.project_to_edit:
+                # Edit existing project
+                project = session.get(Project, self.project_to_edit)
+                if project:
+                    project.name = form_data["name"]
+                    project.description = form_data.get("description", "")
+                    project.system_instructions = form_data.get(
+                        "system_instructions", ""
+                    )
+                    project.updated_at = datetime.now(timezone.utc)
+                    session.add(project)
+                    session.commit()
+                    # Update current project if editing current
+                    if self.current_project_id == project.id:
+                        self.current_project_id = project.id
+            else:
+                # Create new project
+                project = Project(
+                    name=self.project_name,
+                    description=self.project_description,
+                    system_instructions=self.project_system_instructions,
+                )
+                session.add(project)
+                session.commit()
+                session.refresh(project)
+
+                # Add any pending documents
+                for doc_data in self.pending_documents:
+                    document = Document(
+                        name=doc_data["name"],
+                        content=doc_data["content"],
+                        type=doc_data["type"],
+                        project_id=project.id,
+                    )
+                    session.add(document)
+                session.commit()
+
+                # Clear pending documents
+                self.pending_documents = []
+
+                # Set as current project
+                self.current_project_id = project.id
+
+            # Clear form data
+            self.project_name = ""
+            self.project_description = ""
+            self.project_system_instructions = ""
+
+            # Close modal and reload
+            self.show_project_modal = False
+            self.project_to_edit = None
+            self.load_project_chats()
+            self.load_projects()
+
+            # Redirect if creating new
+            if not self.project_to_edit:
+                return rx.redirect(f"/projects/{project.id}")
+
+    # Initialize pending documents list
+    pending_documents: list[dict] = []
