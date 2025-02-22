@@ -439,10 +439,20 @@ class State(rx.State):
                 session.add(project)
                 session.commit()
                 session.refresh(project)
+                # Register pending documents for the new project
+                for pending in self.pending_documents:
+                    document = Document(
+                        project_id=project.id,
+                        name=pending.get("name", ""),
+                        content=pending.get("content", ""),
+                        type=pending.get("type", "text"),
+                    )
+                    session.add(document)
+                session.commit()
                 # Set as current project
                 self.current_project_id = project.id
 
-        # Clear form data now that submission has been processed
+        # Clear form data (including pending documents)
         self.clear_project_form()
         self.load_project_chats()
         self.load_projects()
@@ -640,10 +650,10 @@ class State(rx.State):
     @rx.event
     async def handle_document_submit(self):
         """Handle document form submission."""
-        with rx.session() as session:
-            if self.project_to_edit:
+        # If editing an existing project, write to the database
+        if self.project_to_edit:
+            with rx.session() as session:
                 if self.document_to_edit_id:
-                    # Update existing document
                     document = session.get(Document, self.document_to_edit_id)
                     if document:
                         document.name = self.document_name
@@ -652,7 +662,6 @@ class State(rx.State):
                         session.add(document)
                         session.commit()
                 else:
-                    # Create new document
                     document = Document(
                         project_id=self.project_to_edit,
                         name=self.document_name,
@@ -661,12 +670,20 @@ class State(rx.State):
                     )
                     session.add(document)
                     session.commit()
-
-                # Increment version to trigger re-render
-                self.doc_list_version += 1
-
-                # Clear form fields
-                self.clear_document_form()
+            # Trigger a re-render if needed.
+            self.doc_list_version += 1
+            self.clear_document_form()
+        else:
+            # For new projects, add document info to pending_documents
+            self.pending_documents.append(
+                {
+                    "name": self.document_name,
+                    "content": self.document_content,
+                    "type": "text",
+                }
+            )
+            self.doc_list_version += 1
+            self.clear_document_form()
 
     show_document_modal: bool = False
 

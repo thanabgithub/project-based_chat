@@ -100,11 +100,11 @@ def project_modal() -> rx.Component:
                             ),
                             on_change=State.set_project_system_instructions,
                         ),
-                        # Knowledge Base Documents Section - Only show when editing
+                        # Show pending documents if creating a new project.
+                        rx.heading("Knowledge Base Documents", size="5"),
                         rx.cond(
-                            State.project_to_edit_data,
+                            State.project_to_edit_data,  # Editing: show existing documents
                             rx.vstack(
-                                rx.heading("Knowledge Base Documents", size="5"),
                                 rx.foreach(
                                     State.project_to_edit_data.knowledge,
                                     lambda doc: rx.context_menu.root(
@@ -134,6 +134,20 @@ def project_modal() -> rx.Component:
                                                 ),
                                             ),
                                         ),
+                                    ),
+                                ),
+                                document_modal(),
+                                width="100%",
+                                align_items="start",
+                            ),
+                            # Else: New project – show pending documents from the state.
+                            rx.vstack(
+                                rx.foreach(
+                                    State.pending_documents,
+                                    lambda doc: rx.hstack(
+                                        rx.icon("file-text", size=20),
+                                        rx.text(doc["name"]),
+                                        spacing="2",
                                     ),
                                 ),
                                 document_modal(),
