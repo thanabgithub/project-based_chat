@@ -6,6 +6,7 @@ from app.components.chat_sidebar import chat_sidebar
 from app.components.main_chat import main_chat
 from app.components.project_modal import project_modal
 from app.components.knowledge_base import knowledge_base
+from app.components.chat_modal import chat_modal
 from app.state import State
 from app.styles import base_style
 
