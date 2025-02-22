@@ -39,6 +39,7 @@ def chat_sidebar() -> rx.Component:
                                 width="100%",
                             ),
                             style={
+                                "width": "100%",
                                 "color": "black",
                                 "_hover": {"background_color": "rgb(229, 231, 235)"},
                                 "background_color": rx.cond(
@@ -49,6 +50,7 @@ def chat_sidebar() -> rx.Component:
                             },
                         ),
                         href=f"/projects/{State.current_project_id}/chats/{chat.id}",
+                        width="100%",
                     ),
                 ),
                 width="100%",

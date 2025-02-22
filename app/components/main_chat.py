@@ -27,12 +27,6 @@ def main_chat() -> rx.Component:
                     ),
                     size="3",
                 ),
-                rx.spacer(),
-                rx.button(
-                    "Knowledge Base",
-                    right_icon="chevron_right",
-                    on_click=State.toggle_knowledge_base,
-                ),
                 width="100%",
                 padding="1rem",
                 border_bottom="1px solid rgb(229, 231, 235)",

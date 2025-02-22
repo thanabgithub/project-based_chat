@@ -8,7 +8,7 @@ base_style = {
 
 # Sidebar styles
 sidebar_style = {
-    "width": "256px",
+    "width": "100%",
     "height": "100%",
     "padding": "1rem",
 }

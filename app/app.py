@@ -10,10 +10,13 @@ from app.components.chat_sidebar import chat_sidebar
 from app.components.main_chat import main_chat
 from app.components.project_modal import project_modal
 
+SIDEBAR_WIDTH = "30ch"
+TWO_COLUMN_TEMPLATE = f"{SIDEBAR_WIDTH} 1fr"
+THREE_COLUMN_TEMPLATE = f"{SIDEBAR_WIDTH} {SIDEBAR_WIDTH} 1fr"
+
 
 def index() -> rx.Component:
     """Index page that redirects to projects."""
-    # Return empty box but trigger navigation on mount
     return rx.box(
         on_mount=lambda: rx.call_script(f"window.location.href = '/projects'")
     )
@@ -23,7 +26,7 @@ def projects() -> rx.Component:
     """Projects page - shows all projects."""
     return rx.box(
         project_modal(),
-        rx.hstack(
+        rx.grid(
             project_sidebar(),
             rx.vstack(
                 rx.heading("Select a Project", size="3", padding="1rem"),
@@ -33,6 +36,7 @@ def projects() -> rx.Component:
                 justify="center",
                 align="center",
             ),
+            grid_template_columns=TWO_COLUMN_TEMPLATE,
             spacing="0",
             height="100vh",
             overflow="hidden",
@@ -45,7 +49,7 @@ def project_chats() -> rx.Component:
     """Project chats page - shows project's chats."""
     return rx.box(
         project_modal(),
-        rx.hstack(
+        rx.grid(
             project_sidebar(),
             chat_sidebar(),
             rx.vstack(
@@ -56,6 +60,7 @@ def project_chats() -> rx.Component:
                 justify="center",
                 align="center",
             ),
+            grid_template_columns=THREE_COLUMN_TEMPLATE,
             spacing="0",
             height="100vh",
             overflow="hidden",
@@ -68,10 +73,11 @@ def chat_view() -> rx.Component:
     """Individual chat view."""
     return rx.box(
         project_modal(),
-        rx.hstack(
+        rx.grid(
             project_sidebar(),
             chat_sidebar(),
             main_chat(),
+            grid_template_columns=THREE_COLUMN_TEMPLATE,
             spacing="0",
             height="100vh",
             overflow="hidden",

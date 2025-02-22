@@ -36,6 +36,7 @@ def project_sidebar() -> rx.Component:
                             width="100%",
                         ),
                         style={
+                            "width": "100%",
                             "color": "white",
                             "_hover": {"background_color": "rgb(55, 65, 81)"},
                             "background_color": rx.cond(
@@ -46,6 +47,7 @@ def project_sidebar() -> rx.Component:
                         },
                     ),
                     href=f"/projects/{p.id}",
+                    width="100%",
                 ),
             ),
             width="100%",
