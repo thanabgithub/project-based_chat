@@ -1,39 +1,40 @@
-"""Welcome to Reflex! This file outlines the steps to create a basic app."""
-
 import reflex as rx
-
-from rxconfig import config
-
-
-class State(rx.State):
-    """The app state."""
-
-    ...
+from app.components.project_sidebar import project_sidebar
+from app.components.chat_sidebar import chat_sidebar
+from app.components.main_chat import main_chat
+from app.components.project_modal import project_modal
+from app.components.knowledge_base import knowledge_base
+from app.styles import base_style
 
 
 def index() -> rx.Component:
-    # Welcome Page (Index)
-    return rx.container(
-        rx.color_mode.button(position="top-right"),
-        rx.vstack(
-            rx.heading("Welcome to Reflex!", size="9"),
-            rx.text(
-                "Get started by editing ",
-                rx.code(f"{config.app_name}/{config.app_name}.py"),
-                size="5",
+    """The main page."""
+    return rx.box(
+        rx.hstack(
+            # Left sidebar - Projects
+            project_sidebar(),
+            # Middle sidebar - Chats
+            chat_sidebar(),
+            # Right area - Chat and Knowledge Base
+            rx.hstack(
+                # Main chat area
+                main_chat(),
+                # Knowledge base (collapsible)
+                knowledge_base(),
+                height="100%",
+                flex="1",
+                overflow="hidden",
             ),
-            rx.link(
-                rx.button("Check out our docs!"),
-                href="https://reflex.dev/docs/getting-started/introduction/",
-                is_external=True,
-            ),
-            spacing="5",
-            justify="center",
-            min_height="85vh",
+            spacing="0",
+            height="100vh",
+            overflow="hidden",
         ),
-        rx.logo(),
+        # Modal for creating new projects
+        project_modal(),
+        style=base_style,
     )
 
 
+# Create the app
 app = rx.App()
 app.add_page(index)
