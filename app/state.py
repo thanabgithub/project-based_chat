@@ -269,11 +269,8 @@ class State(rx.State):
 
     @rx.event
     def set_show_project_modal(self, show: bool):
-        """Set modal visibility directly and clean up form when closing."""
-
+        """Set modal visibility directly without clearing form data."""
         self.show_project_modal = show
-        if not show:  # When closing the modal
-            self.clear_project_form()  # Clear all form data
 
     @rx.event
     def set_show_chat_modal(self, show: bool):
@@ -445,10 +442,7 @@ class State(rx.State):
                 # Set as current project
                 self.current_project_id = project.id
 
-        # Update modal state directly so that it closes immediately.
-        self.show_project_modal = False
-
-        # Clear form data and reload projects/chats
+        # Clear form data now that submission has been processed
         self.clear_project_form()
         self.load_project_chats()
         self.load_projects()

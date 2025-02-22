@@ -141,7 +141,7 @@ def project_modal() -> rx.Component:
                                 align_items="start",
                             ),
                         ),
-                        # Project modal buttons
+                        # Project modal buttons using best practice with rx.dialog.close
                         rx.flex(
                             rx.dialog.close(
                                 rx.button(
@@ -150,9 +150,11 @@ def project_modal() -> rx.Component:
                                     color_scheme="gray",
                                 ),
                             ),
-                            rx.button(
-                                "Done",
-                                type="submit",
+                            rx.dialog.close(
+                                rx.button(
+                                    "Done",
+                                    type="submit",
+                                ),
                             ),
                             spacing="3",
                             justify="end",
