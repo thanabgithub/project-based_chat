@@ -1,5 +1,3 @@
-"""The app state."""
-
 from datetime import datetime, timezone
 from typing import List, Optional
 from sqlmodel import select, desc
@@ -211,16 +209,6 @@ class State(rx.State):
         self.message = ""
         self.load_project_chats()
 
-    @rx.event
-    async def delete_document(self, doc_id: int):
-        """Delete a document from the knowledge base."""
-        with rx.session() as session:
-            document = session.get(Document, doc_id)
-            if document and document.project_id == self.current_project_id:
-                session.delete(document)
-                session.commit()
-                # Could add toast or other notification here
-
     # Project modal state
     show_project_modal: bool = False
     project_to_edit: Optional[int] = None
@@ -246,21 +234,22 @@ class State(rx.State):
     def toggle_project_modal(self):
         """Toggle the project modal."""
         self.show_project_modal = not self.show_project_modal
-        if not self.show_project_modal:
-            # Clear edit state when closing
-            self.project_to_edit = None
+        # if not self.show_project_modal:
+        #     # Clear edit state when closing
+        #     self.project_to_edit = None
 
     @rx.event
     def set_show_project_modal(self, show: bool):
         """Set modal visibility directly."""
         self.show_project_modal = show
-        if not show:
-            # Clear edit state when closing
-            self.project_to_edit = None
+        # if not show:
+        #     # Clear edit state when closing
+        #     self.project_to_edit = None
 
     @rx.event
-    async def handle_project_submit(self, form_data: dict):
+    def handle_project_submit(self, form_data: dict):
         """Handle project form submission - create or edit."""
+        print(self.project_to_edit)
         with rx.session() as session:
             if self.project_to_edit:
                 # Edit existing project
@@ -339,54 +328,6 @@ class State(rx.State):
     def set_project_system_instructions(self, instructions: str):
         """Set the project system instructions input value."""
         self.project_system_instructions = instructions
-
-    # Also update handle_project_submit to use these values if not editing
-    @rx.event
-    async def handle_project_submit(self, form_data: dict):
-        """Handle project form submission - create or edit."""
-        with rx.session() as session:
-            if self.project_to_edit:
-                # Edit existing project
-                project = session.get(Project, self.project_to_edit)
-                if project:
-                    project.name = form_data["name"]
-                    project.description = form_data.get("description", "")
-                    project.system_instructions = form_data.get(
-                        "system_instructions", ""
-                    )
-                    project.updated_at = datetime.now(timezone.utc)
-                    session.add(project)
-                    session.commit()
-                    # Update current project if editing current
-                    if self.current_project_id == project.id:
-                        self.current_project_id = project.id
-            else:
-                # Create new project
-                project = Project(
-                    name=self.project_name,
-                    description=self.project_description,
-                    system_instructions=self.project_system_instructions,
-                )
-                session.add(project)
-                session.commit()
-                session.refresh(project)
-                # Set as current project
-                self.current_project_id = project.id
-
-            # Clear form data
-            self.project_name = ""
-            self.project_description = ""
-            self.project_system_instructions = ""
-
-            # Close modal and reload
-            self.show_project_modal = False
-            self.project_to_edit = None
-            self.load_project_chats()
-            self.load_projects()
-
-            # Redirect if creating new
-            if not self.project_to_edit:
-                return rx.redirect(f"/projects/{project.id}")
 
     # Chat modal state
     chat_to_edit: Optional[int] = None
@@ -487,93 +428,56 @@ class State(rx.State):
         self.load_project_chats()
         return rx.redirect(f"/projects/{self.current_project_id}")
 
+    doc_list_version: int = 0
+
+    document_name: str = ""
+    document_content: str = ""
+    pending_documents: list[dict] = []
+
     @rx.event
-    async def handle_document_submit(self, form_data: dict):
+    async def handle_document_submit(self):
         """Handle document form submission."""
         with rx.session() as session:
             if self.project_to_edit:
-                # Add document to existing project
-                project = session.get(Project, self.project_to_edit)
-                if project:
-                    document = Document(
-                        name=form_data["name"],
-                        content=form_data.get("content", ""),
-                        type="text",  # Automatically set type to text
-                        project_id=project.id,
-                    )
-                    session.add(document)
-                    session.commit()
+                # Create and save the new document
+                document = Document(
+                    project_id=self.project_to_edit,
+                    name=self.document_name,
+                    content=self.document_content,
+                    type="text",
+                )
+                session.add(document)
+                session.commit()
+
+                # Refresh project data to get updated knowledge list
+                statement = (
+                    select(Project)
+                    .options(selectinload(Project.knowledge))
+                    .where(Project.id == self.project_to_edit)
+                )
+                self.project_to_edit_data = session.exec(statement).first()
+
+                # Clear form fields
+                self.document_name = ""
+                self.document_content = ""
 
             else:
                 # Store document data to be added when project is created
                 self.pending_documents.append(
                     {
-                        "name": form_data["name"],
-                        "content": form_data.get("content", ""),
+                        "name": self.document_name,
+                        "content": self.document_content,
                         "type": "text",
                     }
                 )
 
-    async def handle_project_submit(self, form_data: dict):
-        """Handle project form submission - create or edit."""
+    @rx.event
+    async def delete_document(self, doc_id: int):
+        """Delete a document from the knowledge base."""
         with rx.session() as session:
-            if self.project_to_edit:
-                # Edit existing project
-                project = session.get(Project, self.project_to_edit)
-                if project:
-                    project.name = form_data["name"]
-                    project.description = form_data.get("description", "")
-                    project.system_instructions = form_data.get(
-                        "system_instructions", ""
-                    )
-                    project.updated_at = datetime.now(timezone.utc)
-                    session.add(project)
-                    session.commit()
-                    # Update current project if editing current
-                    if self.current_project_id == project.id:
-                        self.current_project_id = project.id
-            else:
-                # Create new project
-                project = Project(
-                    name=self.project_name,
-                    description=self.project_description,
-                    system_instructions=self.project_system_instructions,
-                )
-                session.add(project)
+            document = session.get(Document, doc_id)
+            if document and document.project_id == self.current_project_id:
+                session.delete(document)
                 session.commit()
-                session.refresh(project)
-
-                # Add any pending documents
-                for doc_data in self.pending_documents:
-                    document = Document(
-                        name=doc_data["name"],
-                        content=doc_data["content"],
-                        type=doc_data["type"],
-                        project_id=project.id,
-                    )
-                    session.add(document)
-                session.commit()
-
-                # Clear pending documents
-                self.pending_documents = []
-
-                # Set as current project
-                self.current_project_id = project.id
-
-            # Clear form data
-            self.project_name = ""
-            self.project_description = ""
-            self.project_system_instructions = ""
-
-            # Close modal and reload
-            self.show_project_modal = False
-            self.project_to_edit = None
-            self.load_project_chats()
-            self.load_projects()
-
-            # Redirect if creating new
-            if not self.project_to_edit:
-                return rx.redirect(f"/projects/{project.id}")
-
-    # Initialize pending documents list
-    pending_documents: list[dict] = []
+                # Increment version to trigger re-render after delete
+                self.doc_list_version += 1
