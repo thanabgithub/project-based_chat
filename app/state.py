@@ -1,10 +1,175 @@
+import os
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import *
+from dotenv import load_dotenv
 from sqlmodel import select, desc
 from sqlalchemy.orm import selectinload
+import aiohttp
+
 
 import reflex as rx
 from .models import Project, Chat, Message, Document
+from dataclasses import dataclass
+import json
+
+load_dotenv()
+
+
+@dataclass
+class StreamChunk:
+    content: Optional[str] = None
+    reasoning: Optional[str] = None
+    is_done: bool = False
+    error: Optional[str] = None
+
+
+class StreamProcessor:
+    """Stream processor that follows the official OpenRouter documentation approach."""
+
+    def __init__(self, response, session):
+        self.response = response
+        self.session = session
+        self.buffer = ""
+        self._closed = False
+
+    async def start(self):
+        """Start processing the stream."""
+        return self
+
+    async def __aiter__(self):
+        """Iterate over the stream chunks following the official approach."""
+        try:
+            while not self._closed:
+                chunk = await self.response.content.read(1024)
+                if not chunk:
+                    break
+
+                self.buffer += chunk.decode("utf-8")
+
+                while True:
+                    line_end = self.buffer.find("\n")
+                    if line_end == -1:
+                        break
+
+                    line = self.buffer[:line_end].strip()
+                    self.buffer = self.buffer[line_end + 1 :]
+
+                    if line.startswith("data: "):
+                        data = line[6:]
+                        if data == "[DONE]":
+                            self._closed = True
+                            break
+
+                        try:
+                            data_obj = json.loads(data)
+                            content = data_obj["choices"][0]["delta"].get("content")
+                            reasoning = data_obj["choices"][0]["delta"].get("reasoning")
+
+                            # Only yield if we have content or reasoning
+                            if content or reasoning:
+                                yield StreamChunk(
+                                    content=content, reasoning=reasoning, is_done=False
+                                )
+                        except json.JSONDecodeError:
+                            continue
+                        except Exception as e:
+                            print(f"Error processing chunk: {str(e)}")
+                            continue
+
+        except Exception as e:
+            print(f"Stream error: {str(e)}")
+        finally:
+            await self.close()
+
+    async def close(self):
+        """Close the stream processor and clean up resources."""
+        if not self._closed:
+            self._closed = True
+            if not self.response.closed:
+                await self.response.release()
+            await self.session.close()
+
+    async def __aenter__(self):
+        """Support for async context manager."""
+        return await self.start()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup when exiting async context."""
+        await self.close()
+
+
+class ChatCompletionChunk:
+    def __init__(self, chunk_data: Dict[str, Any]):
+        self.choices = [Choice(choice) for choice in chunk_data.get("choices", [])]
+        self.id = chunk_data.get("id")
+        self.model = chunk_data.get("model")
+        self.created = chunk_data.get("created")
+
+
+class Choice:
+    def __init__(self, choice_data: Dict[str, Any]):
+        self.delta = Delta(choice_data.get("delta", {}))
+        self.index = choice_data.get("index")
+        self.finish_reason = choice_data.get("finish_reason")
+
+
+class Delta:
+    def __init__(self, delta_data: Dict[str, Any]):
+        self.content = delta_data.get("content")
+        self.role = delta_data.get("role")
+        self.reasoning = delta_data.get("reasoning")
+
+
+class AsyncOpenRouterAI:
+    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1"):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.chat = self.Chat(self)
+
+    class Chat:
+        def __init__(self, client):
+            self.client = client
+            self.completions = self
+
+        async def create(
+            self,
+            model: str,
+            messages: List[Dict[str, str]],
+            stream: bool = False,
+            include_reasoning: bool = False,
+            **kwargs,
+        ) -> Union[ChatCompletionChunk, StreamProcessor]:
+            """Create a chat completion with queue-based streaming."""
+            url = f"{self.client.base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.client.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            payload = {
+                "model": model,
+                "messages": messages,
+                "stream": stream,
+                "include_reasoning": include_reasoning,
+                **kwargs,
+            }
+
+            session = aiohttp.ClientSession()
+            try:
+                response = await session.post(url, headers=headers, json=payload)
+
+                if not stream:
+                    try:
+                        data = await response.json()
+                        return ChatCompletionChunk(data)
+                    finally:
+                        await session.close()
+
+                return await StreamProcessor(response, session).start()
+
+            except Exception as e:
+                await session.close()
+                raise
 
 
 class State(rx.State):
@@ -20,7 +185,6 @@ class State(rx.State):
     show_project_modal: bool = False
     show_chat_modal: bool = False
     show_knowledge_base: bool = False
-    message: str = ""
 
     @rx.var
     def projects(self) -> List[Project]:
@@ -558,3 +722,131 @@ class State(rx.State):
         self.document_to_edit_id = doc_id
         self.document_name = name
         self.document_content = content
+
+    # Chat processing state
+    processing: bool = False
+    message: str = ""
+    previous_keydown_character: str = ""
+    model: str = "mistralai/codestral-2501"
+
+    @rx.event(background=True)
+    async def handle_action_bar_keydown(self, keydown_character: str):
+        """Handle keyboard shortcuts."""
+        async with self:
+            if (
+                self.previous_keydown_character == "Control"
+                and keydown_character == "Enter"
+            ):
+                yield State.process_message
+            self.previous_keydown_character = keydown_character
+
+    @rx.event(background=True)
+    async def stop_process(self):
+        """Stop the current processing."""
+        async with self:
+            self.processing = False
+
+    def format_messages(self, message: str) -> List[Dict[str, str]]:
+        """Format chat history and current message into messages for the API."""
+        messages = []
+
+        # Get chat history
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if chat:
+                for msg in chat.messages:
+                    if msg.content:
+                        messages.append({"role": msg.role, "content": msg.content})
+
+        # Add current message
+        messages.append({"role": "user", "content": message})
+        return messages
+
+    @rx.event(background=True)
+    async def process_message(self):
+        """Process the current message with AI and add to chat history."""
+        if not self.message.strip() or not self.current_chat_id:
+            return
+
+        current_message = self.message
+
+        async with self:
+            self.processing = True
+            self.message = ""
+
+        try:
+            # Initialize API client
+            client = AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=os.getenv("OPENROUTER_API_KEY"),
+            )
+
+            messages = self.format_messages(current_message)
+
+            # Create user message
+            with rx.session() as session:
+                message = Message(
+                    role="user", content=current_message, chat_id=self.current_chat_id
+                )
+                session.add(message)
+                session.commit()
+
+                # Create initial assistant message
+                assistant_message = Message(
+                    role="assistant", chat_id=self.current_chat_id
+                )
+                session.add(assistant_message)
+                session.commit()
+                session.refresh(assistant_message)
+                assistant_id = assistant_message.id
+
+            # Get streaming response
+            processor = await client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                stream=True,
+                include_reasoning=True,
+            )
+
+            async with processor:
+                answer = ""
+                reasoning = ""
+
+                async for chunk in processor:
+                    if not self.processing:
+                        break
+
+                    # Update message in database
+                    with rx.session() as session:
+                        message = session.get(Message, assistant_id)
+
+                        if chunk.reasoning:
+                            reasoning += chunk.reasoning
+                            message.reasoning = reasoning
+
+                        if chunk.content:
+                            answer += chunk.content
+                            message.content = answer
+
+                        session.add(message)
+                        session.commit()
+
+            # Update chat timestamp
+            with rx.session() as session:
+                chat = session.get(Chat, self.current_chat_id)
+                chat.updated_at = datetime.now(timezone.utc)
+                session.add(chat)
+                session.commit()
+
+        except Exception as e:
+            # Handle errors
+            with rx.session() as session:
+                message = session.get(Message, assistant_id)
+                message.content = f"Error: {str(e)}"
+                session.add(message)
+                session.commit()
+
+        finally:
+            async with self:
+                self.processing = False
+            self.load_project_chats()
