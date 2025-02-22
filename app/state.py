@@ -316,3 +316,70 @@ class State(rx.State):
     async def set_project_to_edit(self, project_id: int):
         """Set which project to edit."""
         self.project_to_edit = project_id
+
+    # Form data state
+    project_name: str = ""
+    project_description: str = ""
+    project_system_instructions: str = ""
+
+
+    def set_project_name(self, name: str):
+        """Set the project name input value."""
+        self.project_name = name
+
+
+    def set_project_description(self, description: str):
+        """Set the project description input value."""
+        self.project_description = description
+
+
+    def set_project_system_instructions(self, instructions: str):
+        """Set the project system instructions input value."""
+        self.project_system_instructions = instructions
+
+
+    # Also update handle_project_submit to use these values if not editing
+    @rx.event
+    async def handle_project_submit(self, form_data: dict):
+        """Handle project form submission - create or edit."""
+        with rx.session() as session:
+            if self.project_to_edit:
+                # Edit existing project
+                project = session.get(Project, self.project_to_edit)
+                if project:
+                    project.name = form_data["name"]
+                    project.description = form_data.get("description", "")
+                    project.system_instructions = form_data.get("system_instructions", "")
+                    project.updated_at = datetime.now(timezone.utc)
+                    session.add(project)
+                    session.commit()
+                    # Update current project if editing current
+                    if self.current_project_id == project.id:
+                        self.current_project_id = project.id
+            else:
+                # Create new project
+                project = Project(
+                    name=self.project_name,
+                    description=self.project_description,
+                    system_instructions=self.project_system_instructions,
+                )
+                session.add(project)
+                session.commit()
+                session.refresh(project)
+                # Set as current project
+                self.current_project_id = project.id
+
+            # Clear form data
+            self.project_name = ""
+            self.project_description = ""
+            self.project_system_instructions = ""
+
+            # Close modal and reload
+            self.show_project_modal = False
+            self.project_to_edit = None
+            self.load_project_chats()
+            self.load_projects()
+
+            # Redirect if creating new
+            if not self.project_to_edit:
+                return rx.redirect(f"/projects/{project.id}")

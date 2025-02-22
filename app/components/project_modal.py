@@ -19,6 +19,7 @@ def project_modal() -> rx.Component:
                                 "",
                             ),
                             required=True,
+                            on_change=State.set_project_name,  # Add handler
                         ),
                         rx.text_area(
                             placeholder="Project Description",
@@ -28,6 +29,7 @@ def project_modal() -> rx.Component:
                                 State.project_to_edit_data.description,
                                 "",
                             ),
+                            on_change=State.set_project_description,  # Add handler
                         ),
                         rx.text_area(
                             placeholder="System Instructions",
@@ -37,6 +39,7 @@ def project_modal() -> rx.Component:
                                 State.project_to_edit_data.system_instructions,
                                 "",
                             ),
+                            on_change=State.set_project_system_instructions,  # Add handler
                         ),
                         rx.flex(
                             rx.dialog.close(
