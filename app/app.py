@@ -1,10 +1,13 @@
 """Main app module."""
 
+import json
+from types import SimpleNamespace
+from socketio import AsyncServer
+
 import reflex as rx
+
 from app.state import State
 from app.styles import base_style
-
-# Components
 from app.components.project_sidebar import project_sidebar
 from app.components.chat_sidebar import chat_sidebar
 from app.components.main_chat import main_chat
@@ -87,8 +90,22 @@ def chat_view() -> rx.Component:
 
 
 """
-don't override component stype here because it will override all interactice effects.
+don't override component style here because it will override all interactice effects.
 """
+
+# this setup require to handle long textarea input
+sio = AsyncServer(
+    async_mode="asgi",
+    cors_allowed_origins=("*"),
+    cors_credentials=True,
+    max_http_buffer_size=50000000000,
+    ping_interval=120,
+    ping_timeout=240,
+    json=SimpleNamespace(
+        dumps=staticmethod(format.json_dumps),
+        loads=staticmethod(json.loads),
+    ),
+)
 
 # Create app and add pages
 app = rx.App(
