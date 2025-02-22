@@ -2,7 +2,7 @@
 
 import reflex as rx
 from app.state import State
-from app.styles import sidebar_style
+from app.styles import sidebar_style, button_base_style
 from app.components.chat_modal import chat_modal
 
 chat_sidebar_style = {
@@ -22,6 +22,7 @@ def chat_sidebar() -> rx.Component:
                     rx.icon("plus", color="black"),
                     on_click=State.toggle_chat_modal,
                     is_disabled=rx.cond(State.current_project_id == None, True, False),
+                    style=button_base_style,
                 ),
                 justify="between",
                 width="100%",
@@ -34,20 +35,25 @@ def chat_sidebar() -> rx.Component:
                     lambda chat: rx.link(
                         rx.button(
                             rx.hstack(
-                                rx.icon("message-square"),
+                                rx.icon("message-square", size=20),
                                 rx.text(chat.name),
                                 width="100%",
                             ),
-                            style={
-                                "width": "100%",
-                                "color": "black",
-                                "_hover": {"background_color": "rgb(229, 231, 235)"},
-                                "background_color": rx.cond(
-                                    chat.id == State.current_chat_id,
-                                    "rgb(229, 231, 235)",
-                                    "transparent",
-                                ),
-                            },
+                            style=[
+                                button_base_style,
+                                {
+                                    "width": "100%",
+                                    "color": "black",
+                                    "_hover": {
+                                        "background_color": "rgb(229, 231, 235)"
+                                    },
+                                    "background_color": rx.cond(
+                                        chat.id == State.current_chat_id,
+                                        "rgb(229, 231, 235)",
+                                        "transparent",
+                                    ),
+                                },
+                            ],
                         ),
                         href=f"/projects/{State.current_project_id}/chats/{chat.id}",
                         width="100%",

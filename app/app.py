@@ -86,16 +86,12 @@ def chat_view() -> rx.Component:
     )
 
 
+"""
+don't override component stype here because it will override all interactice effects.
+"""
+
 # Create app and add pages
 app = rx.App(
-    style={
-        "button": {
-            "padding": "0.5rem 1rem",
-            "border_radius": "0.375rem",
-            "text_align": "left",
-            "background_color": "transparent",
-        }
-    },
     theme=rx.theme(
         appearance="light",
         accent_color="gray",

@@ -12,6 +12,14 @@ sidebar_style = {
     "height": "100%",
     "padding": "1rem",
 }
+# Common button base style
+button_base_style = {
+    "width": "auto",
+    "padding": "0.5rem 1rem",
+    "border_radius": "0.375rem",
+    "text_align": "left",
+    "background_color": "transparent",
+}
 
 
 # Modal styles
