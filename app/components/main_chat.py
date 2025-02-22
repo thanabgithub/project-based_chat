@@ -1,6 +1,11 @@
 import reflex as rx
 from app.state import State
 
+"""
+current_project and current_chat are defined as computed vars 
+using the @rx.var decorator in State class 
+"""
+
 
 def main_chat() -> rx.Component:
     """The main chat component."""
@@ -13,6 +18,12 @@ def main_chat() -> rx.Component:
                         State.current_project,
                         State.current_project.name,
                         "Select a Project",
+                    )
+                    + " / "
+                    + rx.cond(
+                        State.current_chat,
+                        State.current_chat.name,
+                        "Select a Chat",
                     ),
                     size="3",
                 ),
