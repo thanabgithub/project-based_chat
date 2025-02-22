@@ -59,7 +59,7 @@ class State(rx.State):
                 self._project_chats = session.exec(
                     select(Chat)
                     .where(Chat.project_id == self.current_project_id)
-                    .order_by(desc(Chat.updated))  # Order by updated descending
+                    .order_by(desc(Chat.updated_at))  # Order by updated_at descending
                 ).all()
 
     @rx.event
@@ -68,8 +68,8 @@ class State(rx.State):
         with rx.session() as session:
             self._projects = session.exec(
                 select(Project).order_by(
-                    desc(Project.updated)
-                )  # Order by updated descending
+                    desc(Project.updated_at)
+                )  # Order by updated_at descending
             ).all()
 
     @rx.event
@@ -123,7 +123,7 @@ class State(rx.State):
         # Update the chat's timestamp when selected
         with rx.session() as session:
             chat = session.get(Chat, chat_id)
-            chat.updated = datetime.now(timezone.utc)
+            chat.updated_at = datetime.now(timezone.utc)
             session.add(chat)
             session.commit()
         self._load_project_chats()  # Refresh to update order
@@ -145,7 +145,7 @@ class State(rx.State):
 
             # Update the chat's timestamp
             chat = session.get(Chat, self.current_chat_id)
-            chat.updated = datetime.now(timezone.utc)
+            chat.updated_at = datetime.now(timezone.utc)
             session.add(chat)
 
             session.commit()
@@ -183,7 +183,7 @@ class State(rx.State):
         # Update the project's timestamp when selected
         with rx.session() as session:
             project = session.get(Project, project_id)
-            project.updated = datetime.now(timezone.utc)
+            project.updated_at = datetime.now(timezone.utc)
             session.add(project)
             session.commit()
 

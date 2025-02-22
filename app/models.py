@@ -13,13 +13,13 @@ class Message(rx.Model, table=True):
     reasoning: Optional[str] = None
 
     chat_id: int = Field(foreign_key="chat.id")
-    created: datetime = Field(
+    created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True), server_default=func.now(), nullable=False
         ),
     )
-    updated: datetime = Field(
+    updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True),
@@ -39,13 +39,13 @@ class Chat(rx.Model, table=True):
     name: str
     project_id: int = Field(foreign_key="project.id")
 
-    created: datetime = Field(
+    created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True), server_default=func.now(), nullable=False
         ),
     )
-    updated: datetime = Field(
+    updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True),
@@ -68,13 +68,13 @@ class Document(rx.Model, table=True):
     content: str = ""
     project_id: int = Field(foreign_key="project.id")
 
-    created: datetime = Field(
+    created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True), server_default=func.now(), nullable=False
         ),
     )
-    updated: datetime = Field(
+    updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True),
@@ -95,13 +95,13 @@ class Project(rx.Model, table=True):
     description: str = ""
     system_instructions: str = ""
 
-    created: datetime = Field(
+    created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True), server_default=func.now(), nullable=False
         ),
     )
-    updated: datetime = Field(
+    updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
             DateTime(timezone=True),
