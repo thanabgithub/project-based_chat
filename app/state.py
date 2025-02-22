@@ -95,6 +95,7 @@ class State(rx.State):
         self.project_name = ""
         self.project_description = ""
         self.project_system_instructions = ""
+        self.project_to_edit = None  # Add this line
         self.pending_documents = []
 
     @rx.event
@@ -104,8 +105,11 @@ class State(rx.State):
 
     @rx.event
     def set_show_project_modal(self, show: bool):
-        """Set modal visibility directly."""
+        """Set modal visibility directly and clean up form when closing."""
+
         self.show_project_modal = show
+        if not show:  # When closing the modal
+            self.clear_project_form()  # Clear all form data
 
     @rx.event
     def set_show_chat_modal(self, show: bool):
@@ -243,11 +247,6 @@ class State(rx.State):
             return session.exec(statement).first()
 
     @rx.event
-    def set_show_project_modal(self, show: bool):
-        """Set modal visibility directly."""
-        self.show_project_modal = show
-
-    @rx.event
     def handle_project_submit(self, form_data: dict):
         """Handle project form submission - create or edit."""
         with rx.session() as session:
@@ -283,8 +282,7 @@ class State(rx.State):
                 self.current_project_id = project.id
 
         # Close modal and reload
-        self.show_project_modal = False
-        self.project_to_edit = None  # Clear edit state after handling submit
+        self.clear_project_form()
         self.load_project_chats()
         self.load_projects()
 
