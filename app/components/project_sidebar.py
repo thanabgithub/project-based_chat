@@ -1,7 +1,13 @@
 import reflex as rx
 from app.state import State
-from app.styles import project_sidebar_style, button_style, selected_button_style
+from app.styles import sidebar_style, button_base_style
 from app.components.project_modal import project_modal
+
+project_sidebar_style = {
+    **sidebar_style,
+    "background_color": "rgb(17, 24, 39)",  # bg-gray-900
+    "color": "white",
+}
 
 
 def project_sidebar() -> rx.Component:
@@ -27,11 +33,18 @@ def project_sidebar() -> rx.Component:
                         width="100%",
                     ),
                     on_click=lambda: State.select_project(p.id),
-                    style=rx.cond(
-                        p.id == State.current_project_id,
-                        selected_button_style,
-                        button_style,
-                    ),
+                    style={
+                        **button_base_style,
+                        "color": "white",
+                        "_hover": {
+                            "background_color": "rgb(55, 65, 81)"
+                        },  # bg-gray-700
+                        "background_color": rx.cond(
+                            p.id == State.current_project_id,
+                            "rgb(55, 65, 81)",
+                            "transparent",
+                        ),
+                    },
                 ),
             ),
             width="100%",

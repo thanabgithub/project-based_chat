@@ -1,7 +1,12 @@
 import reflex as rx
 from app.state import State
-from app.styles import chat_sidebar_style, button_style, selected_button_style
+from app.styles import sidebar_style, button_base_style
 from app.components.chat_modal import chat_modal
+
+chat_sidebar_style = {
+    **sidebar_style,
+    "background_color": "rgb(249, 250, 251)",  # bg-gray-50
+}
 
 
 def chat_sidebar() -> rx.Component:
@@ -32,11 +37,18 @@ def chat_sidebar() -> rx.Component:
                             width="100%",
                         ),
                         on_click=lambda: State.select_chat(chat.id),
-                        style=rx.cond(
-                            chat.id == State.current_chat_id,
-                            selected_button_style,
-                            button_style,
-                        ),
+                        style={
+                            **button_base_style,
+                            "color": "black",
+                            "_hover": {
+                                "background_color": "rgb(229, 231, 235)"
+                            },  # bg-gray-200
+                            "background_color": rx.cond(
+                                chat.id == State.current_chat_id,
+                                "rgb(229, 231, 235)",  # bg-gray-200
+                                "transparent",
+                            ),
+                        },
                     ),
                 ),
                 width="100%",

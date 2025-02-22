@@ -13,30 +13,16 @@ sidebar_style = {
     "padding": "1rem",
 }
 
-project_sidebar_style = {
-    **sidebar_style,
-    "background_color": "rgb(17, 24, 39)",  # bg-gray-900
-    "color": "white",
-}
 
-chat_sidebar_style = {
-    **sidebar_style,
-    "background_color": "rgb(249, 250, 251)",  # bg-gray-50
-}
-
-# Button styles
-button_style = {
+# Common button base style
+button_base_style = {
     "width": "100%",
     "padding": "0.5rem 1rem",
     "border_radius": "0.375rem",
     "text_align": "left",
-    "_hover": {"background_color": "rgb(55, 65, 81)"},  # bg-gray-700
+    "background_color": "transparent",
 }
 
-selected_button_style = {
-    **button_style,
-    "background_color": "rgb(55, 65, 81)",  # bg-gray-700
-}
 
 # Modal styles
 modal_style = {
