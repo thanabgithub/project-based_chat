@@ -7,19 +7,19 @@ def chat_sidebar() -> rx.Component:
     """The chat sidebar component."""
     return rx.box(
         rx.hstack(
-            rx.heading("Chats", size="md"),
+            rx.heading("Chats", size="4"),
             rx.button(
-                rx.icon("add"),
-                on_click=lambda: None,  # TODO: Implement new chat
+                rx.icon("plus"),
+                on_click=None,
             ),
-            justify="space-between",
+            justify="between",
             width="100%",
             padding_bottom="1rem",
         ),
         rx.vstack(
             rx.button(
                 rx.hstack(
-                    rx.icon("chat"),
+                    rx.icon("message-square"),
                     rx.text("Chat 1"),
                     width="100%",
                 ),
@@ -27,14 +27,14 @@ def chat_sidebar() -> rx.Component:
             ),
             rx.button(
                 rx.hstack(
-                    rx.icon("chat"),
+                    rx.icon("message-square"),
                     rx.text("Chat 2"),
                     width="100%",
                 ),
                 style=button_style,
             ),
             width="100%",
-            spacing="0.5rem",
+            spacing="4",
             overflow="auto",
         ),
         style=chat_sidebar_style,

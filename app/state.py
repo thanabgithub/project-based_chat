@@ -10,7 +10,7 @@ class Document:
     id: int
     name: str
     type: str
-    content: str
+    content: str = ""
 
 
 @dataclass
@@ -37,6 +37,16 @@ class State(rx.State):
     # UI state
     show_project_modal: bool = False
     show_knowledge_base: bool = False
+
+    message: str = ""
+    chat_messages: List[str] = []
+
+    @rx.event
+    def send_message(self):
+        """Send a chat message."""
+        if self.message.strip():
+            self.chat_messages.append(self.message)
+            self.message = ""
 
     @rx.var
     def current_project(self) -> Optional[Project]:
@@ -76,15 +86,28 @@ class State(rx.State):
         self.current_project_id = project.id
 
     @rx.event
-    def upload_document(self, file_data: List[dict]):
+    async def upload_document(self, files: List[rx.UploadFile]):
         """Upload a document to the current project."""
         if not self.current_project:
             return
 
-        for file in file_data:
+        for file in files:
+            # Read the file content
+            content = await file.read()
+            content_str = content.decode("utf-8")
+
             doc = Document(
                 id=len(self.current_project.knowledge),
-                name=file["name"],
-                type=file["type"],
+                name=file.filename,
+                type=file.content_type,
+                content=content_str,
             )
             self.current_project.knowledge.append(doc)
+
+    @rx.event
+    def delete_document(self, doc_id: int):
+        """Delete a document from the current project."""
+        if self.current_project:
+            self.current_project.knowledge = [
+                doc for doc in self.current_project.knowledge if doc.id != doc_id
+            ]

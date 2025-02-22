@@ -9,12 +9,12 @@ def main_chat() -> rx.Component:
             # Header
             rx.hstack(
                 rx.heading(
-                    (
-                        State.current_project.name
-                        if State.current_project
-                        else "Select a Project"
+                    rx.cond(
+                        State.current_project,
+                        State.current_project.name,
+                        "Select a Project",
                     ),
-                    size="lg",
+                    size="3",
                 ),
                 rx.spacer(),
                 rx.button(
@@ -36,10 +36,12 @@ def main_chat() -> rx.Component:
             # Input area
             rx.hstack(
                 rx.input(
+                    value=State.message,
                     placeholder="Type your message...",
+                    on_change=State.set_message,
                     flex="1",
                 ),
-                rx.button("Send", on_click=lambda: None),  # TODO: Implement send
+                rx.button("Send", on_click=State.send_message),
                 padding="1rem",
                 border_top="1px solid rgb(229, 231, 235)",
             ),

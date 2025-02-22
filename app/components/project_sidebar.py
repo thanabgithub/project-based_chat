@@ -7,12 +7,12 @@ def project_sidebar() -> rx.Component:
     """The project sidebar component."""
     return rx.box(
         rx.hstack(
-            rx.heading("Projects", size="md"),
+            rx.heading("Projects", size="4"),
             rx.button(
-                rx.icon("add"),
+                rx.icon("plus"),
                 on_click=State.toggle_project_modal,
             ),
-            justify="space-between",
+            justify="between",
             width="100%",
             padding_bottom="1rem",
         ),
@@ -26,15 +26,16 @@ def project_sidebar() -> rx.Component:
                         width="100%",
                     ),
                     on_click=lambda: State.select_project(p.id),
-                    style=(
-                        selected_button_style
-                        if p.id == State.current_project_id
-                        else button_style
+                    # Use rx.cond instead of Python if/else
+                    style=rx.cond(
+                        p.id == State.current_project_id,
+                        selected_button_style,
+                        button_style,
                     ),
                 ),
             ),
             width="100%",
-            spacing="0.5rem",
+            spacing="4",
             overflow="auto",
             flex="1",
         ),

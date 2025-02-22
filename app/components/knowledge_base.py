@@ -8,36 +8,34 @@ def knowledge_base() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.heading("Knowledge Base", size="md"),
+                rx.heading("Knowledge Base", size="4"),
                 rx.upload(
-                    rx.button("Upload"),
-                    multiple=True,
-                    accept={
-                        "application/pdf": [".pdf"],
-                        "text/plain": [".txt"],
-                        "text/markdown": [".md"],
-                    },
-                    on_upload=State.upload_document,
+                    # on_upload=State.upload_document,
+                    id="knowledge_base_upload",
                 ),
-                justify="space-between",
+                rx.button(
+                    "Upload",
+                    on_click=rx.set_value("knowledge_base_upload", ""),
+                ),
+                justify="between",
                 width="100%",
             ),
             rx.foreach(
-                State.current_project.knowledge if State.current_project else [],
+                State.current_project.knowledge,
                 lambda doc: rx.hstack(
-                    rx.icon("document"),
+                    rx.icon("file-text"),
                     rx.text(doc.name),
                     rx.spacer(),
                     rx.button(
                         rx.icon("delete"),
-                        on_click=lambda: None,  # TODO: Implement delete
+                        on_click=State.delete_document(doc.id),
                         variant="ghost",
                     ),
                     width="100%",
                 ),
             ),
             width="100%",
-            spacing="1rem",
+            spacing="4",
             display=rx.cond(State.show_knowledge_base, "flex", "none"),
         ),
         style=knowledge_base_style,
