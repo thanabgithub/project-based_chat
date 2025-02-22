@@ -100,12 +100,11 @@ def project_modal() -> rx.Component:
                             ),
                             on_change=State.set_project_system_instructions,
                         ),
-                        # Knowledge Base Documents Section
-                        rx.vstack(
-                            rx.heading("Knowledge Base Documents", size="5"),
-                            # Show existing documents if editing
-                            rx.cond(
-                                State.project_to_edit_data,
+                        # Knowledge Base Documents Section - Only show when editing
+                        rx.cond(
+                            State.project_to_edit_data,
+                            rx.vstack(
+                                rx.heading("Knowledge Base Documents", size="5"),
                                 rx.foreach(
                                     State.project_to_edit_data.knowledge,
                                     lambda doc: rx.context_menu.root(
@@ -137,11 +136,10 @@ def project_modal() -> rx.Component:
                                         ),
                                     ),
                                 ),
+                                document_modal(),
+                                width="100%",
+                                align_items="start",
                             ),
-                            # Document Modal
-                            document_modal(),
-                            width="100%",
-                            align_items="start",
                         ),
                         # Project modal buttons
                         rx.flex(

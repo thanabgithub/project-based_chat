@@ -604,37 +604,6 @@ class State(rx.State):
     doc_list_version: int = 0  # Add this version counter
 
     @rx.event
-    async def handle_document_submit(self):
-        """Handle document form submission."""
-        with rx.session() as session:
-            if self.project_to_edit:
-                # Create and save the new document
-                document = Document(
-                    project_id=self.project_to_edit,
-                    name=self.document_name,
-                    content=self.document_content,
-                    type="text",
-                )
-                session.add(document)
-                session.commit()
-
-                # Increment version to trigger re-render
-                self.doc_list_version += 1
-
-                # Clear form fields
-                self.document_name = ""
-                self.document_content = ""
-            else:
-                # Store document data to be added when project is created
-                self.pending_documents.append(
-                    {
-                        "name": self.document_name,
-                        "content": self.document_content,
-                        "type": "text",
-                    }
-                )
-
-    @rx.event
     async def delete_document(self, doc_id: int):
         """Delete a document from the knowledge base."""
         with rx.session() as session:
