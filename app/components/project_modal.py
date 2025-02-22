@@ -49,12 +49,7 @@ def project_modal() -> rx.Component:
                             rx.cond(
                                 State.project_to_edit_data,
                                 rx.foreach(
-                                    # Add the doc_list_version to force re-render
-                                    rx.cond(
-                                        State.doc_list_version > 0,
-                                        State.project_to_edit_data.knowledge,
-                                        State.project_to_edit_data.knowledge,
-                                    ),
+                                    State.project_to_edit_data.knowledge,
                                     lambda doc: rx.hstack(
                                         rx.icon("file-text"),
                                         rx.text(doc.name),

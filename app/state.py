@@ -221,6 +221,7 @@ class State(rx.State):
     @rx.var
     def project_to_edit_data(self) -> Optional[Project]:
         """Get the project being edited with its knowledge documents eagerly loaded."""
+        _ = self.doc_list_version  # Adding a dependency to force recomputation
         if self.project_to_edit is None:
             return None
         with rx.session() as session:
@@ -434,6 +435,8 @@ class State(rx.State):
     document_content: str = ""
     pending_documents: list[dict] = []
 
+    doc_list_version: int = 0  # Add this version counter
+
     @rx.event
     async def handle_document_submit(self):
         """Handle document form submission."""
@@ -449,18 +452,12 @@ class State(rx.State):
                 session.add(document)
                 session.commit()
 
-                # Refresh project data to get updated knowledge list
-                statement = (
-                    select(Project)
-                    .options(selectinload(Project.knowledge))
-                    .where(Project.id == self.project_to_edit)
-                )
-                self.project_to_edit_data = session.exec(statement).first()
+                # Increment version to trigger re-render
+                self.doc_list_version += 1
 
                 # Clear form fields
                 self.document_name = ""
                 self.document_content = ""
-
             else:
                 # Store document data to be added when project is created
                 self.pending_documents.append(
