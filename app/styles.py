@@ -16,7 +16,6 @@ sidebar_style = {
 button_base_style = {
     "width": "auto",
     "padding": "0.5rem 1rem",
-    "border_radius": "0.375rem",
     "text_align": "left",
     "background_color": "transparent",
 }
@@ -25,7 +24,6 @@ button_base_style = {
 # Modal styles
 modal_style = {
     "padding": "2rem",
-    "border_radius": "0.5rem",
     "background_color": "white",
     "max_width": "500px",
     "width": "100%",

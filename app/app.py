@@ -95,7 +95,7 @@ app = rx.App(
     theme=rx.theme(
         appearance="light",
         accent_color="gray",
-        radius="medium",
+        radius="large",
     ),
 )
 
