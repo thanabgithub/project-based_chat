@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 from sqlmodel import select, desc
+from sqlalchemy.orm import selectinload
 
 import reflex as rx
 from .models import Project, Chat, Message, Document
@@ -231,11 +232,16 @@ class State(rx.State):
 
     @rx.var
     def project_to_edit_data(self) -> Optional[Project]:
-        """Get the project being edited."""
+        """Get the project being edited with its knowledge documents eagerly loaded."""
         if self.project_to_edit is None:
             return None
         with rx.session() as session:
-            return session.get(Project, self.project_to_edit)
+            statement = (
+                select(Project)
+                .options(selectinload(Project.knowledge))
+                .where(Project.id == self.project_to_edit)
+            )
+            return session.exec(statement).first()
 
     def toggle_project_modal(self):
         """Toggle the project modal."""

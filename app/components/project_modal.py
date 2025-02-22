@@ -33,6 +33,7 @@ def project_modal() -> rx.Component:
                             ),
                             required=True,
                             on_change=State.set_project_name,
+                            default_value=State.project_name,
                         ),
                         rx.text_area(
                             placeholder="Project Description",
