@@ -14,6 +14,7 @@ class LogLevel(str, Enum):
 
 config = rx.Config(
     app_name="app",
+    db_url="sqlite:///reflex.db",
     loglevel=LogLevel.DEBUG,
     env=rx.Env.DEV,
     # frontend_port=80,

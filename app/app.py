@@ -1,9 +1,12 @@
+"""Main app module."""
+
 import reflex as rx
 from app.components.project_sidebar import project_sidebar
 from app.components.chat_sidebar import chat_sidebar
 from app.components.main_chat import main_chat
 from app.components.project_modal import project_modal
 from app.components.knowledge_base import knowledge_base
+from app.state import State
 from app.styles import base_style
 
 
@@ -41,4 +44,6 @@ app = rx.App(
         radius="medium",
     )
 )
-app.add_page(index)
+
+# Add page and load projects on page load
+app.add_page(index, on_load=State.load_projects)
