@@ -2,6 +2,64 @@ import reflex as rx
 from app.state import State
 
 
+def document_modal() -> rx.Component:
+    """Document modal for adding/editing documents."""
+    return rx.dialog.root(
+        rx.dialog.trigger(
+            rx.button(
+                "Add Document",
+                variant="soft",
+            ),
+        ),
+        rx.dialog.content(
+            rx.dialog.title(
+                rx.cond(State.document_to_edit_id, "Edit Document", "Add Document")
+            ),
+            rx.dialog.description(
+                rx.flex(
+                    rx.input(
+                        value=State.document_name,
+                        on_change=State.set_document_name,
+                        placeholder="Document Name",
+                        name="name",
+                        required=True,
+                    ),
+                    rx.text_area(
+                        value=State.document_content,
+                        on_change=State.set_document_content,
+                        placeholder="Document Content",
+                        name="content",
+                        height="200px",
+                    ),
+                    rx.flex(
+                        rx.dialog.close(
+                            rx.button(
+                                "Cancel",
+                                variant="soft",
+                                color_scheme="gray",
+                                on_click=State.clear_document_form,
+                            ),
+                        ),
+                        rx.dialog.close(
+                            rx.button(
+                                "Save",
+                                on_click=State.handle_document_submit,
+                            ),
+                        ),
+                        spacing="3",
+                        justify="end",
+                    ),
+                    direction="column",
+                    spacing="4",
+                )
+            ),
+            max_width="450px",
+        ),
+        open=State.show_document_modal,
+        on_open_change=State.set_show_document_modal,
+    )
+
+
 def project_modal() -> rx.Component:
     """The project modal component - handles both create and edit."""
     return rx.dialog.root(
@@ -50,69 +108,38 @@ def project_modal() -> rx.Component:
                                 State.project_to_edit_data,
                                 rx.foreach(
                                     State.project_to_edit_data.knowledge,
-                                    lambda doc: rx.hstack(
-                                        rx.icon("file-text"),
-                                        rx.text(doc.name),
-                                        rx.spacer(),
-                                        rx.button(
-                                            rx.icon("delete"),
-                                            on_click=State.delete_document(doc.id),
-                                            variant="ghost",
+                                    lambda doc: rx.context_menu.root(
+                                        rx.context_menu.trigger(
+                                            rx.hstack(
+                                                rx.icon("file-text", size=20),
+                                                rx.text(doc.name),
+                                                width="100%",
+                                            ),
                                         ),
-                                        width="100%",
+                                        rx.context_menu.content(
+                                            rx.context_menu.item(
+                                                "Edit",
+                                                on_click=[
+                                                    lambda: State.set_document_to_edit(
+                                                        doc.id, doc.name, doc.content
+                                                    ),
+                                                    lambda: State.toggle_document_modal(),
+                                                ],
+                                            ),
+                                            rx.context_menu.separator(),
+                                            rx.context_menu.item(
+                                                "Delete",
+                                                color_scheme="red",
+                                                on_click=lambda: State.delete_document(
+                                                    doc.id
+                                                ),
+                                            ),
+                                        ),
                                     ),
                                 ),
                             ),
                             # Document Modal
-                            rx.dialog.root(
-                                rx.dialog.trigger(
-                                    rx.button(
-                                        "Add Document",
-                                        variant="soft",
-                                    ),
-                                ),
-                                rx.dialog.content(
-                                    rx.dialog.title("Add Document"),
-                                    rx.dialog.description(
-                                        rx.flex(
-                                            rx.input(
-                                                value=State.document_name,
-                                                on_change=State.set_document_name,
-                                                placeholder="Document Name",
-                                                name="name",
-                                                required=True,
-                                            ),
-                                            rx.text_area(
-                                                value=State.document_content,
-                                                on_change=State.set_document_content,
-                                                placeholder="Document Content",
-                                                name="content",
-                                                height="200px",
-                                            ),
-                                            rx.flex(
-                                                rx.dialog.close(
-                                                    rx.button(
-                                                        "Cancel",
-                                                        variant="soft",
-                                                        color_scheme="gray",
-                                                    ),
-                                                ),
-                                                rx.dialog.close(
-                                                    rx.button(
-                                                        "Add",
-                                                        on_click=State.handle_document_submit,
-                                                    ),
-                                                ),
-                                                spacing="3",
-                                                justify="end",
-                                            ),
-                                            direction="column",
-                                            spacing="4",
-                                        )
-                                    ),
-                                    max_width="450px",
-                                ),
-                            ),
+                            document_modal(),
                             width="100%",
                             align_items="start",
                         ),
@@ -138,7 +165,7 @@ def project_modal() -> rx.Component:
                         spacing="4",
                     ),
                     on_submit=State.handle_project_submit,
-                    reset_on_submit=False,
+                    reset_on_submit=True,
                 ),
             ),
             max_width="450px",

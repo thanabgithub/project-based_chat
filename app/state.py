@@ -482,3 +482,81 @@ class State(rx.State):
                 session.commit()
                 # Increment version to trigger re-render after delete
                 self.doc_list_version += 1
+
+    # Document form state
+    document_to_edit_id: Optional[int] = None
+    document_name: str = ""
+    document_content: str = ""
+
+    def set_document_name(self, name: str):
+        """Set document name."""
+        self.document_name = name
+
+    def set_document_content(self, content: str):
+        """Set document content."""
+        self.document_content = content
+
+    @rx.event
+    def set_document_to_edit(self, doc_id: int, name: str, content: str):
+        """Set document being edited and populate form fields."""
+        self.document_to_edit_id = doc_id
+        self.document_name = name
+        self.document_content = content
+
+    def clear_document_form(self):
+        """Clear document form fields."""
+        self.document_to_edit_id = None
+        self.document_name = ""
+        self.document_content = ""
+
+    @rx.event
+    async def handle_document_submit(self):
+        """Handle document form submission."""
+        with rx.session() as session:
+            if self.project_to_edit:
+                if self.document_to_edit_id:
+                    # Update existing document
+                    document = session.get(Document, self.document_to_edit_id)
+                    if document:
+                        document.name = self.document_name
+                        document.content = self.document_content
+                        document.updated_at = datetime.now(timezone.utc)
+                        session.add(document)
+                        session.commit()
+                else:
+                    # Create new document
+                    document = Document(
+                        project_id=self.project_to_edit,
+                        name=self.document_name,
+                        content=self.document_content,
+                        type="text",
+                    )
+                    session.add(document)
+                    session.commit()
+
+                # Increment version to trigger re-render
+                self.doc_list_version += 1
+
+                # Clear form fields
+                self.clear_document_form()
+
+    show_document_modal: bool = False
+
+    @rx.event
+    def toggle_document_modal(self):
+        """Toggle document modal visibility."""
+        self.show_document_modal = not self.show_document_modal
+
+    @rx.event
+    def set_show_document_modal(self, show: bool):
+        """Set document modal visibility."""
+        self.show_document_modal = show
+        if not show:
+            self.clear_document_form()
+
+    @rx.event
+    def set_document_to_edit(self, doc_id: int, name: str, content: str):
+        """Set document being edited and populate form fields."""
+        self.document_to_edit_id = doc_id
+        self.document_name = name
+        self.document_content = content
