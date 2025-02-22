@@ -173,18 +173,221 @@ class AsyncOpenRouterAI:
 
 
 class State(rx.State):
-    """The app state."""
+    # -------------------------------------------------------------------------
+    # Existing state fields, events, and computed vars…
+    # -------------------------------------------------------------------------
 
-    # Project state
     _projects: List[Project] = []
     _project_chats: List[Chat] = []
     current_project_id: Optional[int] = None
     current_chat_id: Optional[int] = None
 
-    # UI state
     show_project_modal: bool = False
     show_chat_modal: bool = False
     show_knowledge_base: bool = False
+
+    editing_user_message_index: Optional[int] = None
+    editing_assistant_content_index: Optional[int] = None
+    editing_assistant_reasoning_index: Optional[int] = None
+    question: str = ""  # For editing/entering user message
+    answer: str = ""  # For editing assistant content
+    reasoning: str = ""  # For editing assistant reasoning
+
+    # -------------------------------------------------------------------------
+    # Editing Events (using current_chat messages via the ORM)
+    # -------------------------------------------------------------------------
+
+    @rx.event
+    def start_editing_user_message(self, index: int):
+        """Start editing a user message from the current chat."""
+        if self.current_chat_id is None:
+            return
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or index < 0 or index >= len(chat.messages):
+                return
+            msg = chat.messages[index]
+            if msg.role != "user":
+                return
+            self.editing_user_message_index = index
+            self.question = msg.content or ""
+
+    @rx.event
+    def start_editing_assistant_content(self, index: int):
+        """Start editing the assistant's content message."""
+        if self.current_chat_id is None:
+            return
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or index < 0 or index >= len(chat.messages):
+                return
+            msg = chat.messages[index]
+            if msg.role != "assistant":
+                return
+            self.editing_assistant_content_index = index
+            self.answer = msg.content or ""
+
+    @rx.event
+    def start_editing_assistant_reasoning(self, index: int):
+        """Start editing the assistant's reasoning."""
+        if self.current_chat_id is None:
+            return
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or index < 0 or index >= len(chat.messages):
+                return
+            msg = chat.messages[index]
+            if msg.role != "assistant":
+                return
+            self.editing_assistant_reasoning_index = index
+            self.reasoning = msg.reasoning or ""
+
+    @rx.event
+    def cancel_editing(self):
+        """Cancel all editing modes."""
+        self.editing_user_message_index = None
+        self.editing_assistant_content_index = None
+        self.editing_assistant_reasoning_index = None
+        self.question = ""
+        self.answer = ""
+        self.reasoning = ""
+
+    @rx.event
+    def delete_message(self, index: int):
+        """Delete a specific message from the current chat.
+        If deleting a user message, also delete the following assistant message (if any).
+        """
+        if self.current_chat_id is None:
+            return
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or index < 0 or index >= len(chat.messages):
+                return
+            msg = chat.messages[index]
+            if msg.role == "user" and index + 1 < len(chat.messages):
+                session.delete(chat.messages[index + 1])
+            session.delete(msg)
+            session.commit()
+
+    @rx.event(background=True)
+    async def update_user_message(self):
+        """
+        Update an existing user message (using the new value in `question`)
+        and regenerate the assistant's answer.
+        """
+        if self.editing_user_message_index is None or not self.question.strip():
+            return
+
+        # Update the user message in the DB and remove all subsequent messages.
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or self.editing_user_message_index >= len(chat.messages):
+                return
+            user_msg = chat.messages[self.editing_user_message_index]
+            if user_msg.role != "user":
+                return
+            user_msg.content = self.question
+            session.add(user_msg)
+            session.commit()
+
+            # Remove all messages after this user message.
+            for msg in chat.messages[self.editing_user_message_index + 1 :]:
+                session.delete(msg)
+            session.commit()
+
+            # Create a new assistant message as a placeholder.
+            assistant_msg = Message(role="assistant", chat_id=self.current_chat_id)
+            session.add(assistant_msg)
+            session.commit()
+            assistant_id = assistant_msg.id
+
+        # Reset editing state for the user message.
+        self.editing_user_message_index = None
+        self.question = ""
+        self.processing = True
+
+        # Call your AI API to regenerate the assistant answer.
+        from app.state import AsyncOpenRouterAI  # adjust if needed
+
+        client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
+        messages = self.format_messages(
+            user_msg.content
+        )  # Format the conversation using the updated user message.
+        try:
+            processor = await client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                stream=True,
+                include_reasoning=True,
+            )
+            answer = ""
+            reasoning = ""
+            async for chunk in processor:
+                if not self.processing:
+                    await processor.close()
+                    break
+                with rx.session() as session:
+                    updated_msg = session.get(Message, assistant_id)
+                    if chunk.reasoning:
+                        reasoning += chunk.reasoning
+                        updated_msg.reasoning = reasoning
+                    if chunk.content:
+                        answer += chunk.content
+                        updated_msg.content = answer
+                    session.add(updated_msg)
+                    session.commit()
+            with rx.session() as session:
+                chat = session.get(Chat, self.current_chat_id)
+                if chat:
+                    chat.updated_at = datetime.now(timezone.utc)
+                    session.add(chat)
+                    session.commit()
+        except Exception as e:
+            with rx.session() as session:
+                assistant_msg = session.get(Message, assistant_id)
+                assistant_msg.content = f"Error: {str(e)}"
+                session.add(assistant_msg)
+                session.commit()
+        finally:
+            async with self:
+                self.processing = False
+            yield
+
+    @rx.event
+    def update_assistant_content(self):
+        """Update the assistant's content message with the new value in `answer`."""
+        if self.editing_assistant_content_index is None or not self.answer.strip():
+            return
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or self.editing_assistant_content_index >= len(chat.messages):
+                return
+            msg = chat.messages[self.editing_assistant_content_index]
+            if msg.role != "assistant":
+                return
+            msg.content = self.answer
+            session.add(msg)
+            session.commit()
+        self.editing_assistant_content_index = None
+        self.answer = ""
+
+    @rx.event
+    def update_assistant_reasoning(self):
+        """Update the assistant's reasoning with the new value in `reasoning`."""
+        if self.editing_assistant_reasoning_index is None or not self.reasoning.strip():
+            return
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or self.editing_assistant_reasoning_index >= len(chat.messages):
+                return
+            msg = chat.messages[self.editing_assistant_reasoning_index]
+            if msg.role != "assistant":
+                return
+            msg.reasoning = self.reasoning
+            session.add(msg)
+            session.commit()
+        self.editing_assistant_reasoning_index = None
+        self.reasoning = ""
 
     @rx.var
     def projects(self) -> List[Project]:
@@ -711,6 +914,15 @@ class State(rx.State):
     message: str = ""
     previous_keydown_character: str = ""
     model: str = "mistralai/codestral-2501"
+
+    @rx.var
+    def chat_messages(self) -> list[Message]:
+        if self.current_chat_id is None:
+            return []
+        with rx.session() as session:
+            return session.exec(
+                select(Message).where(Message.chat_id == self.current_chat_id)
+            ).all()
 
     @rx.event(background=True)
     async def handle_action_bar_keydown(self, keydown_character: str):
