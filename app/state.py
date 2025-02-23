@@ -510,14 +510,6 @@ class State(rx.State):
     @rx.event
     async def select_project(self, project_id: int):
         """Select a project."""
-        with rx.session() as session:
-            project = session.get(Project, project_id)
-            if not project:
-                return rx.redirect("/projects")
-
-            project.updated_at = datetime.now(timezone.utc)
-            session.add(project)
-            session.commit()
 
         self.current_project_id = project_id
         self.current_chat_id = None  # Clear selected chat
@@ -1083,14 +1075,6 @@ class State(rx.State):
         """Select chat and load its messages."""
         self.current_chat_id = chat_id
         self.load_messages()  # Use the new load_messages method
-
-        # Update chat timestamp
-        with rx.session() as session:
-            chat = session.get(Chat, chat_id)
-            if chat:
-                chat.updated_at = datetime.now(timezone.utc)
-                session.add(chat)
-                session.commit()
 
         self.load_project_chats()  # Refresh to update order
 
