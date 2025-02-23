@@ -208,6 +208,24 @@ class State(rx.State):
     answer: str = ""  # For editing assistant content
     reasoning: str = ""  # For editing assistant reasoning
 
+    def load_messages(self):
+        """Load messages from database into state."""
+        if self.current_chat_id is None:
+            self.messages = []
+            return
+
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if chat and chat.messages:
+                self.messages = [
+                    UIMessage(
+                        role=msg.role, content=msg.content, reasoning=msg.reasoning
+                    )
+                    for msg in chat.messages
+                ]
+            else:
+                self.messages = []
+
     # -------------------------------------------------------------------------
     # Editing Events (using current_chat messages via the ORM)
     # -------------------------------------------------------------------------
@@ -267,22 +285,31 @@ class State(rx.State):
         self.answer = ""
         self.reasoning = ""
 
-    @rx.event
-    def delete_message(self, index: int):
-        """Delete a specific message from the current chat.
-        If deleting a user message, also delete the following assistant message (if any).
-        """
-        if self.current_chat_id is None:
-            return
-        with rx.session() as session:
-            chat = session.get(Chat, self.current_chat_id)
-            if not chat or index < 0 or index >= len(chat.messages):
+    @rx.event(background=True)
+    async def delete_message(self, index: int):
+        """Delete a specific message from the current chat."""
+        async with self:
+            if self.current_chat_id is None:
                 return
-            msg = chat.messages[index]
-            if msg.role == "user" and index + 1 < len(chat.messages):
-                session.delete(chat.messages[index + 1])
-            session.delete(msg)
-            session.commit()
+
+            with rx.session() as session:
+                chat = session.get(Chat, self.current_chat_id)
+                if not chat or index < 0 or index >= len(chat.messages):
+                    return
+
+                msg = chat.messages[index]
+                # If deleting user message, also delete the assistant's response
+                if msg.role == "user" and index + 1 < len(chat.messages):
+                    session.delete(chat.messages[index + 1])
+                session.delete(msg)
+
+                # Update chat timestamp
+                chat.updated_at = datetime.now(timezone.utc)
+                session.add(chat)
+                session.commit()
+
+            # Update the messages in state
+            self.load_messages()
 
     @rx.event
     async def update_user_message(self):
@@ -1050,12 +1077,12 @@ class State(rx.State):
             async with self:
                 self.processing = False
 
+    # Update the select_chat method to use load_messages
     @rx.event
     async def select_chat(self, chat_id: int):
         """Select chat and load its messages."""
         self.current_chat_id = chat_id
-        # Load messages from database
-        self.load_chat_messages()
+        self.load_messages()  # Use the new load_messages method
 
         # Update chat timestamp
         with rx.session() as session:
@@ -1066,24 +1093,6 @@ class State(rx.State):
                 session.commit()
 
         self.load_project_chats()  # Refresh to update order
-
-    @rx.event
-    def delete_message(self, index: int):
-        """Delete a specific message from the current chat.
-        If deleting a user message, also delete the following assistant message (if any).
-        """
-        if self.current_chat_id is None:
-            return
-        with rx.session() as session:
-            chat = session.get(Chat, self.current_chat_id)
-            if not chat or index < 0 or index >= len(chat.messages):
-                return
-            msg = chat.messages[index]
-            # If deleting user message, also delete the assistant's response
-            if msg.role == "user" and index + 1 < len(chat.messages):
-                session.delete(chat.messages[index + 1])
-            session.delete(msg)
-            session.commit()
 
     @rx.event
     def start_editing(self, index: int, field: str):
