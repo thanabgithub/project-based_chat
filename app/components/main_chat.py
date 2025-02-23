@@ -14,7 +14,7 @@ message_style = {
     "display": "inline-block",
     "color": "black",
 }
-question_style = {
+message_style = {
     **message_style,
     **{"width": "100%", "border": "1px solid #E9E9E9", "box_shadow": "none"},
 }
@@ -136,9 +136,9 @@ def editing_user_input(index: int) -> rx.Component:
             rx.form(
                 rx.vstack(
                     rx.text_area(
-                        value=State.question,
+                        value=State.message,
                         placeholder="Edit your message...",
-                        on_change=State.set_question,
+                        on_change=State.set_message,
                         style=input_style,
                     ),
                     rx.hstack(
@@ -276,7 +276,7 @@ def user_message(msg: Message, index: int) -> rx.Component:
                 rx.box(
                     rx.text(
                         msg.content,
-                        style={**question_style, "padding": "1em"},
+                        style={**message_style, "padding": "1em"},
                         white_space="pre-wrap",
                     ),
                     width="100%",
@@ -490,9 +490,9 @@ def action_bar() -> rx.Component:
                     rx.vstack(
                         rx.text_area(
                             id="input-textarea--action-bar",
-                            value=State.question,
+                            value=State.message,
                             placeholder="何でも質問してください...",
-                            on_change=[State.set_question],
+                            on_change=[State.set_message],
                             style=input_style,
                             on_key_down=[
                                 State.handle_action_bar_keydown,
@@ -561,24 +561,19 @@ def action_bar() -> rx.Component:
 def main_chat() -> rx.Component:
     return rx.box(
         rx.vstack(
-            rx.hstack(
-                rx.heading(
-                    rx.cond(
-                        State.current_project,
-                        State.current_project.name,
-                        "Select a Project",
-                    )
-                    + " / "
-                    + rx.cond(
-                        State.current_chat,
-                        State.current_chat.name,
-                        "Select a Chat",
-                    ),
-                    size="3",
+            rx.heading(
+                rx.cond(
+                    State.current_project,
+                    State.current_project.name,
+                    "Select a Project",
+                )
+                + " / "
+                + rx.cond(
+                    State.current_chat,
+                    State.current_chat.name,
+                    "Select a Chat",
                 ),
-                width="100%",
-                padding="1rem",
-                border_bottom="1px solid rgb(229, 231, 235)",
+                size="3",
             ),
             chat(),
             action_bar(),
