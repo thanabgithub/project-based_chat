@@ -914,7 +914,7 @@ class State(rx.State):
     previous_keydown_character: str = ""
     messages: List[UIMessage] = []  # For UI display
     ui_messages: list[UIMessage] = []
-    current_message: str = ""
+    current_question: str = ""
     model: str = "mistralai/codestral-2501"
     processing: bool = False
 
@@ -952,7 +952,7 @@ class State(rx.State):
                 self.previous_keydown_character == "Control"
                 and keydown_character == "Enter"
             ):
-                yield State.process_message
+                yield State.process_question
             self.previous_keydown_character = keydown_character
 
     def format_messages(self) -> List[dict]:
@@ -986,17 +986,17 @@ class State(rx.State):
         self.messages = self.chat_messages
 
     @rx.event(background=True)
-    async def process_message(self):
+    async def process_question(self):
         """Process message with AI and handle database storage."""
-        if not self.current_message.strip():
+        if not self.current_question.strip():
             return
 
-        message_text = self.current_message
+        message_text = self.current_question
         temp_messages = []  # Local list for building up messages
 
         async with self:
             self.processing = True
-            self.current_message = ""
+            self.current_question = ""
 
             # Add messages to temporary list
             temp_messages.append(UIMessage(role="user", content=message_text))
@@ -1150,9 +1150,9 @@ class State(rx.State):
         self.model = model
 
     @rx.event
-    def set_current_message(self, message: str):
+    def set_current_question(self, message: str):
         """Set the current message being typed."""
-        self.current_message = message
+        self.current_question = message
 
     @rx.event
     def set_edit_content(self, content: str):

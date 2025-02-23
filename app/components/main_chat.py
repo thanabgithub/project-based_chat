@@ -1,77 +1,87 @@
+"""Chat interface components and styles."""
+
 import reflex as rx
 from app.state import State, Message
 
-# Styles
+# Style Definitions
+# Common styles with dict syntax
 shadow = "rgba(0, 0, 0, 0.15) 0px 2px 8px"
-message_style = {
-    "padding_inline": "1em",
-    "margin_block": "0.25em",
-    "border_radius": "1rem",
-    "display": "inline-block",
-    "color": "black",
-    "width": "100%",
-    "border": "1px solid #E9E9E9",
-    "box_shadow": "none",
-}
+message_style = dict(
+    padding_inline="1em",
+    margin_block="0.25em",
+    border_radius="1rem",
+    display="inline-block",
+    color="black",
+)
 
-answer_style = {
-    **message_style,
-    "background_color": "#F9F9F9",
-}
+question_style = message_style | dict(
+    width="100%",
+    border="1px solid #E9E9E9",
+    padding="1em",
+    box_shadow="none",
+)
 
-input_style = {
-    "border": "none",
-    "padding": "0.5em",
-    "width": "100%",
-    "color": "black",
-    "background_color": "transparent",
-    "outline": "none",
-    "box_shadow": "none",
-    "font_size": "1em",
-    "min_height": "6em",
-    "height": "100%",
-    "max_height": "60vh",
-    "overflow_y": "auto",
-    "resize": "vertical",
-    "_focus": {"border": "none", "outline": "none", "box_shadow": "none"},
-    "_placeholder": {"color": "#A3A3A3"},
-}
+answer_style = message_style | dict(
+    background_color="#F9F9F9",
+    border="1px solid #E9E9E9",
+    box_shadow="none",
+    width="100%",
+)
 
-input_container_style = {
-    "border": "1px solid #E9E9E9",
-    "border_radius": "15px",
-    "padding": "1em",
-    "width": "100%",
-    "background_color": "white",
-    "box_shadow": shadow,
-}
+# Container styles
+input_container_style = dict(
+    border="1px solid #E9E9E9",
+    border_radius="15px",
+    padding="1em",
+    width="100%",
+    background_color="white",
+    box_shadow=shadow,
+)
 
-select_style = {
-    "border": "1px solid #E9E9E9",
-    "padding": "0.5em",
-    "border_radius": "1em",
-    "background_color": "#F5F5F5",
-    "color": "black",
-    "width": "auto",
-    "min_width": "150px",
-}
+input_style = dict(
+    border="none",
+    padding="0.5em",
+    width="100%",
+    color="black",
+    background_color="transparent",
+    outline="none",
+    box_shadow="none",
+    font_size="1em",
+    min_height="6em",
+    height="100%",
+    max_height="60vh",
+    overflow_y="auto",
+    resize="vertical",
+    _focus={"border": "none", "outline": "none", "box_shadow": "none"},
+    _placeholder={"color": "#A3A3A3"},
+)
 
-button_style = {
-    "background_color": "#FFFFFF",
-    "border": "1px solid #E9E9E9",
-    "border_radius": "8px",
-    "padding": "0.5em",
-    "color": "black",
-}
+select_style = dict(
+    border="1px solid #E9E9E9",
+    padding="0.5em",
+    border_radius="1em",
+    background_color="#F5F5F5",
+    color="black",
+    width="auto",
+    min_width="150px",
+)
 
-chat_style = {
-    "padding": "2em",
-    "height": "100vh",
-    "overflow_y": "auto",
-    "background_color": "white",
-    "color": "black",
-    "scroll_behavior": "smooth",
-}
+button_style = dict(
+    background_color="#FFFFFF",
+    border="1px solid #E9E9E9",
+    border_radius="8px",
+    padding="0.5em",
+    color="black",
+)
+
+chat_style = dict(
+    padding="2em",
+    height="100vh",
+    overflow_y="auto",
+    background_color="white",
+    color="black",
+    scroll_behavior="smooth",
+)
 
 
 def editing_message_input(index: int) -> rx.Component:
@@ -88,9 +98,15 @@ def editing_message_input(index: int) -> rx.Component:
                     ),
                     rx.hstack(
                         rx.button(
-                            "Cancel", on_click=State.cancel_editing, style=button_style
+                            "Cancel",
+                            on_click=State.cancel_editing,
+                            style=button_style,
                         ),
-                        rx.button("Update", type="submit", style=button_style),
+                        rx.button(
+                            "Update",
+                            type="submit",
+                            style=button_style,
+                        ),
                         justify="end",
                         width="100%",
                     ),
@@ -110,7 +126,7 @@ def user_message(msg: Message, index: int) -> rx.Component:
             rx.box(
                 rx.text(
                     msg.content,
-                    style=message_style,
+                    style=question_style,
                     white_space="pre-wrap",
                 ),
                 width="80%",
@@ -119,7 +135,8 @@ def user_message(msg: Message, index: int) -> rx.Component:
         ),
         rx.context_menu.content(
             rx.context_menu.item(
-                "Edit Message", on_click=lambda: State.start_editing(index, "content")
+                "Edit Message",
+                on_click=lambda: State.start_editing(index, "content"),
             ),
             rx.context_menu.separator(),
             rx.context_menu.item(
@@ -194,19 +211,12 @@ def assistant_message(msg: Message, index: int) -> rx.Component:
 
 
 def message(msg: Message, index: int) -> rx.Component:
-    """Render a message with proper editing states.
-
-    Uses rx.cond and bitwise operators to handle state comparisons since we're working
-    with JavaScript expressions rather than Python boolean values.
-    """
+    """Render a message with proper editing states."""
     return rx.cond(
-        # First check if we're editing this message
         (State.editing_user_message_index == index)
         | (State.editing_assistant_content_index == index)
         | (State.editing_assistant_reasoning_index == index),
-        # If editing, show the edit input
         editing_message_input(index),
-        # If not editing, show the appropriate message type
         rx.cond(
             msg.role == "user",
             user_message(msg, index),
@@ -218,7 +228,6 @@ def message(msg: Message, index: int) -> rx.Component:
 def action_bar() -> rx.Component:
     """Input bar for sending messages."""
     return rx.cond(
-        # Check if any editing state is active using bitwise OR
         (State.editing_user_message_index != None)
         | (State.editing_assistant_content_index != None)
         | (State.editing_assistant_reasoning_index != None),
@@ -229,9 +238,9 @@ def action_bar() -> rx.Component:
                     rx.vstack(
                         rx.text_area(
                             id="input-textarea--action-bar",
-                            value=State.current_message,
+                            value=State.current_question,
                             placeholder="Ask me anything...",
-                            on_change=State.set_current_message,
+                            on_change=State.set_current_question,
                             style=input_style,
                             on_key_down=State.handle_action_bar_keydown,
                         ),
@@ -271,9 +280,11 @@ def action_bar() -> rx.Component:
                                     },
                                 ),
                             ),
+                            justify="between",
+                            width="100%",
                         ),
                     ),
-                    on_submit=State.process_message,
+                    on_submit=State.process_question,
                 ),
                 width="100%",
             ),
