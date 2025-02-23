@@ -16,6 +16,13 @@ load_dotenv()
 
 
 @dataclass
+class Message:
+    role: str
+    content: Optional[str] = None
+    reasoning: Optional[str] = None
+
+
+@dataclass
 class StreamChunk:
     content: Optional[str] = None
     reasoning: Optional[str] = None
@@ -24,11 +31,11 @@ class StreamChunk:
 
 
 class StreamProcessor:
-    """Stream processor that follows the official OpenRouter documentation approach."""
+    """Stream processor with proper resource management."""
 
-    def __init__(self, response, session):
+    def __init__(self, response, client):
         self.response = response
-        self.session = session
+        self.client = client
         self.buffer = ""
         self._closed = False
 
@@ -37,7 +44,7 @@ class StreamProcessor:
         return self
 
     async def __aiter__(self):
-        """Iterate over the stream chunks following the official approach."""
+        """Iterate over the stream chunks."""
         try:
             while not self._closed:
                 chunk = await self.response.content.read(1024)
@@ -65,7 +72,6 @@ class StreamProcessor:
                             content = data_obj["choices"][0]["delta"].get("content")
                             reasoning = data_obj["choices"][0]["delta"].get("reasoning")
 
-                            # Only yield if we have content or reasoning
                             if content or reasoning:
                                 yield StreamChunk(
                                     content=content, reasoning=reasoning, is_done=False
@@ -87,15 +93,7 @@ class StreamProcessor:
             self._closed = True
             if not self.response.closed:
                 await self.response.release()
-            await self.session.close()
-
-    async def __aenter__(self):
-        """Support for async context manager."""
-        return await self.start()
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Cleanup when exiting async context."""
-        await self.close()
+            # Note: Don't close the client session here as it may be reused
 
 
 class ChatCompletionChunk:
@@ -125,6 +123,19 @@ class AsyncOpenRouterAI:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.chat = self.Chat(self)
+        self._session = None
+
+    async def get_session(self):
+        """Get or create an aiohttp ClientSession."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def close(self):
+        """Close the client session if it exists."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
 
     class Chat:
         def __init__(self, client):
@@ -154,7 +165,7 @@ class AsyncOpenRouterAI:
                 **kwargs,
             }
 
-            session = aiohttp.ClientSession()
+            session = await self.client.get_session()
             try:
                 response = await session.post(url, headers=headers, json=payload)
 
@@ -163,12 +174,15 @@ class AsyncOpenRouterAI:
                         data = await response.json()
                         return ChatCompletionChunk(data)
                     finally:
-                        await session.close()
+                        # For non-streaming requests, close immediately after use
+                        await response.release()
 
-                return await StreamProcessor(response, session).start()
+                # For streaming, return StreamProcessor which will handle cleanup
+                return await StreamProcessor(response, self.client).start()
 
             except Exception as e:
-                await session.close()
+                # Ensure session is closed on error
+                await self.client.close()
                 raise
 
 
@@ -909,20 +923,26 @@ class State(rx.State):
         self.document_name = name
         self.document_content = content
 
-    # Chat processing state
-    processing: bool = False
-    message: str = ""
-    previous_keydown_character: str = ""
+    # Chat state
+    messages: List[Message] = []
+    current_message: str = ""
     model: str = "mistralai/codestral-2501"
+    processing: bool = False
+    previous_keydown_character: str = ""
 
-    @rx.var
-    def chat_messages(self) -> list[Message]:
-        if self.current_chat_id is None:
-            return []
-        with rx.session() as session:
-            return session.exec(
-                select(Message).where(Message.chat_id == self.current_chat_id)
-            ).all()
+    # Editing state
+    editing_user_message_index: Optional[int] = None
+    editing_assistant_content_index: Optional[int] = None
+    editing_assistant_reasoning_index: Optional[int] = None
+    edit_content: str = ""
+
+    def format_messages(self) -> List[Dict[str, str]]:
+        """Format chat history for the API."""
+        return [
+            {"role": msg.role, "content": msg.content}
+            for msg in self.messages
+            if msg.content
+        ]
 
     @rx.event(background=True)
     async def handle_action_bar_keydown(self, keydown_character: str):
@@ -936,112 +956,122 @@ class State(rx.State):
             self.previous_keydown_character = keydown_character
 
     @rx.event(background=True)
-    async def stop_process(self):
-        """Stop the current processing."""
-        async with self:
-            self.processing = False
-
-    def format_messages(self, message: str) -> List[Dict[str, str]]:
-        """Format chat history and current message into messages for the API."""
-        messages = []
-
-        # Get chat history
-        with rx.session() as session:
-            chat = session.get(Chat, self.current_chat_id)
-            if chat:
-                for msg in chat.messages:
-                    if msg.content:
-                        messages.append({"role": msg.role, "content": msg.content})
-
-        # Add current message
-        messages.append({"role": "user", "content": message})
-        return messages
-
-    @rx.event(background=True)
     async def process_message(self):
-        """Process the current message with AI and add to chat history."""
-        if not self.message.strip() or not self.current_chat_id:
+        """Process the current message with AI."""
+        if not self.current_message.strip():
             return
 
-        current_message = self.message
+        message_text = self.current_message
 
         async with self:
             self.processing = True
-            self.message = ""
+            self.current_message = ""
+
+            # Add user message
+            self.messages.append(Message(role="user", content=message_text))
+            # Add placeholder for assistant message
+            self.messages.append(Message(role="assistant"))
+
+        client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
+        answer = ""
+        reasoning = ""
 
         try:
-            # Initialize API client
-            client = AsyncOpenRouterAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=os.getenv("OPENROUTER_API_KEY"),
-            )
-
-            messages = self.format_messages(current_message)
-
-            # Create user message
-            with rx.session() as session:
-                message = Message(
-                    role="user", content=current_message, chat_id=self.current_chat_id
-                )
-                session.add(message)
-                session.commit()
-
-                # Create initial assistant message
-                assistant_message = Message(
-                    role="assistant", chat_id=self.current_chat_id
-                )
-                session.add(assistant_message)
-                session.commit()
-                session.refresh(assistant_message)
-                assistant_id = assistant_message.id
-
-            # Get streaming response
             processor = await client.chat.completions.create(
                 model=self.model,
-                messages=messages,
+                messages=self.format_messages(),
                 stream=True,
                 include_reasoning=True,
             )
 
-            async with processor:
-                answer = ""
-                reasoning = ""
+            async for chunk in processor:
+                if not self.processing:
+                    break
 
-                async for chunk in processor:
-                    if not self.processing:
-                        break
+                async with self:
+                    if chunk.reasoning:
+                        reasoning += chunk.reasoning
+                        self.messages[-1].reasoning = reasoning
 
-                    # Update message in database
-                    with rx.session() as session:
-                        message = session.get(Message, assistant_id)
-
-                        if chunk.reasoning:
-                            reasoning += chunk.reasoning
-                            message.reasoning = reasoning
-
-                        if chunk.content:
-                            answer += chunk.content
-                            message.content = answer
-
-                        session.add(message)
-                        session.commit()
-
-            # Update chat timestamp
-            with rx.session() as session:
-                chat = session.get(Chat, self.current_chat_id)
-                chat.updated_at = datetime.now(timezone.utc)
-                session.add(chat)
-                session.commit()
+                    if chunk.content:
+                        answer += chunk.content
+                        self.messages[-1].content = answer
 
         except Exception as e:
-            # Handle errors
-            with rx.session() as session:
-                message = session.get(Message, assistant_id)
-                message.content = f"Error: {str(e)}"
-                session.add(message)
-                session.commit()
+            async with self:
+                self.messages[-1].content = f"Error: {str(e)}"
 
         finally:
+            # Ensure client is properly closed
+            await client.close()
             async with self:
                 self.processing = False
-            self.load_project_chats()
+
+    @rx.event
+    def delete_message(self, index: int):
+        """Delete a message and its response if it's a user message."""
+        if index < len(self.messages):
+            if self.messages[index].role == "user" and index + 1 < len(self.messages):
+                self.messages.pop(index + 1)
+            self.messages.pop(index)
+
+    @rx.event
+    def start_editing(self, index: int, field: str):
+        """Start editing a specific field of a message."""
+        if 0 <= index < len(self.messages):
+            msg = self.messages[index]
+            self.edit_content = getattr(msg, field, "")
+
+            if field == "content":
+                if msg.role == "user":
+                    self.editing_user_message_index = index
+                else:
+                    self.editing_assistant_content_index = index
+            elif field == "reasoning":
+                self.editing_assistant_reasoning_index = index
+
+    @rx.event
+    def save_edit(self):
+        """Save the current edit."""
+        if self.editing_user_message_index is not None:
+            self.messages[self.editing_user_message_index].content = self.edit_content
+            self.regenerate_response(self.editing_user_message_index)
+        elif self.editing_assistant_content_index is not None:
+            self.messages[self.editing_assistant_content_index].content = (
+                self.edit_content
+            )
+        elif self.editing_assistant_reasoning_index is not None:
+            self.messages[self.editing_assistant_reasoning_index].reasoning = (
+                self.edit_content
+            )
+
+        self.cancel_editing()
+
+    @rx.event
+    def cancel_editing(self):
+        """Cancel all editing."""
+        self.editing_user_message_index = None
+        self.editing_assistant_content_index = None
+        self.editing_assistant_reasoning_index = None
+        self.edit_content = ""
+
+    @rx.event
+    def set_model(self, model: str):
+        """Set the AI model to use."""
+        self.model = model
+
+    @rx.event
+    def set_current_message(self, message: str):
+        """Set the current message being typed."""
+        self.current_message = message
+
+    @rx.event
+    def set_edit_content(self, content: str):
+        """Set the content being edited."""
+        self.edit_content = content
+
+    @rx.event
+    async def stop_process(self):
+        """Stop the current processing."""
+        async with self:
+            self.processing = False
