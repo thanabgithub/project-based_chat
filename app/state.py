@@ -6,6 +6,7 @@ from sqlmodel import select, desc
 from sqlalchemy.orm import selectinload
 import aiohttp
 
+import dataclasses
 
 import reflex as rx
 from .models import Project, Chat, Message, Document
@@ -15,8 +16,8 @@ import json
 load_dotenv()
 
 
-@dataclass
-class Message:
+@dataclasses.dataclass
+class UIMessage:
     role: str
     content: Optional[str] = None
     reasoning: Optional[str] = None
@@ -560,21 +561,6 @@ class State(rx.State):
         return self.load_projects()
 
     @rx.event
-    async def select_chat(self, chat_id: int):
-        """Select a chat."""
-        self.current_chat_id = chat_id
-        # Update the chat's timestamp when selected
-        with rx.session() as session:
-            chat = session.get(Chat, chat_id)
-            if not chat:
-                return rx.redirect(f"/projects/{self.current_project_id}")
-
-            chat.updated_at = datetime.now(timezone.utc)
-            session.add(chat)
-            session.commit()
-        self.load_project_chats()  # Refresh to update order
-
-    @rx.event
     async def send_message(self):
         """Send a chat message."""
         if not self.message.strip() or not self.current_chat_id:
@@ -924,11 +910,25 @@ class State(rx.State):
         self.document_content = content
 
     # Chat state
-    messages: List[Message] = []
+    _temp_messages: List[UIMessage] = []  # Temporary list for streaming
+    previous_keydown_character: str = ""
+    messages: List[UIMessage] = []  # For UI display
+    ui_messages: list[UIMessage] = []
     current_message: str = ""
     model: str = "mistralai/codestral-2501"
     processing: bool = False
-    previous_keydown_character: str = ""
+
+    @rx.var
+    def chat_messages(self) -> List[Message]:
+        """Get messages for current chat from database."""
+        if self.current_chat_id is None:
+            return []
+
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if chat:
+                return chat.messages
+        return []
 
     # Editing state
     editing_user_message_index: Optional[int] = None
@@ -955,23 +955,69 @@ class State(rx.State):
                 yield State.process_message
             self.previous_keydown_character = keydown_character
 
+    def format_messages(self) -> List[dict]:
+        """Format chat history for the API."""
+        return [
+            {"role": msg.role, "content": msg.content}
+            for msg in self.messages
+            if msg.content
+        ]
+
+    @rx.var
+    def chat_messages(self) -> List[UIMessage]:
+        """Get messages for current chat from database and convert to UIMessage objects."""
+        if self.current_chat_id is None:
+            return []
+
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if chat and chat.messages:
+                # Convert DB messages to UIMessage objects
+                return [
+                    UIMessage(
+                        role=msg.role, content=msg.content, reasoning=msg.reasoning
+                    )
+                    for msg in chat.messages
+                ]
+        return []
+
+    def load_chat_messages(self):
+        """Load messages from database into state."""
+        self.messages = self.chat_messages
+
     @rx.event(background=True)
     async def process_message(self):
-        """Process the current message with AI."""
+        """Process message with AI and handle database storage."""
         if not self.current_message.strip():
             return
 
         message_text = self.current_message
+        temp_messages = []  # Local list for building up messages
 
         async with self:
             self.processing = True
             self.current_message = ""
 
-            # Add user message
-            self.messages.append(Message(role="user", content=message_text))
-            # Add placeholder for assistant message
-            self.messages.append(Message(role="assistant"))
+            # Add messages to temporary list
+            temp_messages.append(UIMessage(role="user", content=message_text))
+            temp_messages.append(UIMessage(role="assistant"))
+            self.messages = temp_messages  # Assign whole list at once
 
+            # Store user message in database
+            with rx.session() as session:
+                user_msg = Message(
+                    role="user", content=message_text, chat_id=self.current_chat_id
+                )
+                session.add(user_msg)
+                session.commit()
+
+                # Create placeholder assistant message
+                assistant_msg = Message(role="assistant", chat_id=self.current_chat_id)
+                session.add(assistant_msg)
+                session.commit()
+                assistant_id = assistant_msg.id
+
+        # Process with AI
         client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
         answer = ""
         reasoning = ""
@@ -991,21 +1037,64 @@ class State(rx.State):
                 async with self:
                     if chunk.reasoning:
                         reasoning += chunk.reasoning
-                        self.messages[-1].reasoning = reasoning
+                        temp_messages[-1].reasoning = reasoning
 
                     if chunk.content:
                         answer += chunk.content
-                        self.messages[-1].content = answer
+                        temp_messages[-1].content = answer
+
+                    self.messages = temp_messages  # Update entire list
+
+            # After streaming completes, update database
+            with rx.session() as session:
+                assistant_msg = session.get(Message, assistant_id)
+                if assistant_msg:
+                    assistant_msg.content = answer
+                    assistant_msg.reasoning = reasoning
+                    session.add(assistant_msg)
+
+                    # Update chat timestamp
+                    chat = session.get(Chat, self.current_chat_id)
+                    if chat:
+                        chat.updated_at = datetime.now(timezone.utc)
+                        session.add(chat)
+
+                    session.commit()
 
         except Exception as e:
             async with self:
-                self.messages[-1].content = f"Error: {str(e)}"
+                temp_messages[-1].content = f"Error: {str(e)}"
+                self.messages = temp_messages  # Update with error
+
+                # Update error in database
+                with rx.session() as session:
+                    assistant_msg = session.get(Message, assistant_id)
+                    if assistant_msg:
+                        assistant_msg.content = f"Error: {str(e)}"
+                        session.add(assistant_msg)
+                        session.commit()
 
         finally:
-            # Ensure client is properly closed
             await client.close()
             async with self:
                 self.processing = False
+
+    @rx.event
+    async def select_chat(self, chat_id: int):
+        """Select chat and load its messages."""
+        self.current_chat_id = chat_id
+        # Load messages from database
+        self.load_chat_messages()
+
+        # Update chat timestamp
+        with rx.session() as session:
+            chat = session.get(Chat, chat_id)
+            if chat:
+                chat.updated_at = datetime.now(timezone.utc)
+                session.add(chat)
+                session.commit()
+
+        self.load_project_chats()  # Refresh to update order
 
     @rx.event
     def delete_message(self, index: int):
