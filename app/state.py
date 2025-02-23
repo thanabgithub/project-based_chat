@@ -1325,7 +1325,7 @@ class State(rx.State):
         """Set the content being edited."""
         self.edit_content = content
 
-    @rx.event
+    @rx.event(background=True)
     async def stop_process(self):
         """Stop the current processing."""
         async with self:
