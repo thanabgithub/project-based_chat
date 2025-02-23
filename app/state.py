@@ -1066,22 +1066,176 @@ class State(rx.State):
             elif field == "reasoning":
                 self.editing_assistant_reasoning_index = index
 
-    @rx.event
-    def save_edit(self):
-        """Save the current edit."""
-        if self.editing_user_message_index is not None:
-            self.messages[self.editing_user_message_index].content = self.edit_content
-            self.regenerate_response(self.editing_user_message_index)
-        elif self.editing_assistant_content_index is not None:
-            self.messages[self.editing_assistant_content_index].content = (
-                self.edit_content
-            )
-        elif self.editing_assistant_reasoning_index is not None:
-            self.messages[self.editing_assistant_reasoning_index].reasoning = (
-                self.edit_content
-            )
+    @rx.event(background=True)
+    async def regenerate_response(self, user_message_index: int):
+        """Regenerate the AI response for a user message after editing.
 
-        self.cancel_editing()
+        Args:
+            user_message_index: Index of the edited user message
+        """
+        # Verify valid message index
+        async with self:
+            if self.current_chat_id is None or user_message_index >= len(self.messages):
+                return
+
+            # Get the updated user message
+            user_message = self.messages[user_message_index]
+
+            # Create temporary message list starting with edited user message
+            temp_messages = [
+                user_message,
+                UIMessage(role="assistant"),  # Placeholder for new response
+            ]
+
+            self.processing = True
+            self.messages = temp_messages[
+                : user_message_index + 2
+            ]  # Show up to new assistant msg
+
+        try:
+            # Store user message update and create new assistant message
+            with rx.session() as session:
+                chat = session.get(Chat, self.current_chat_id)
+                if not chat or user_message_index >= len(chat.messages):
+                    return
+
+                # Delete the old assistant message if it exists
+                if user_message_index + 1 < len(chat.messages):
+                    session.delete(chat.messages[user_message_index + 1])
+
+                # Create new assistant message placeholder
+                assistant_msg = Message(role="assistant", chat_id=self.current_chat_id)
+                session.add(assistant_msg)
+                session.commit()
+                assistant_id = assistant_msg.id
+
+            # Process with AI
+            client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
+            answer = ""
+            reasoning = ""
+
+            try:
+                processor = await client.chat.completions.create(
+                    model=self.model,
+                    messages=self.format_messages(),
+                    stream=True,
+                    include_reasoning=True,
+                )
+
+                async for chunk in processor:
+                    if not self.processing:
+                        break
+
+                    async with self:
+                        if chunk.reasoning:
+                            reasoning += chunk.reasoning
+                            temp_messages[-1].reasoning = reasoning
+
+                        if chunk.content:
+                            answer += chunk.content
+                            temp_messages[-1].content = answer
+
+                        self.messages = temp_messages  # Update UI
+
+                # After streaming completes, update database
+                with rx.session() as session:
+                    assistant_msg = session.get(Message, assistant_id)
+                    if assistant_msg:
+                        assistant_msg.content = answer
+                        assistant_msg.reasoning = reasoning
+                        session.add(assistant_msg)
+
+                        # Update chat timestamp
+                        chat = session.get(Chat, self.current_chat_id)
+                        if chat:
+                            chat.updated_at = datetime.now(timezone.utc)
+                            session.add(chat)
+
+                        session.commit()
+
+            except Exception as e:
+                # Handle errors by showing error message
+                async with self:
+                    temp_messages[-1].content = f"Error: {str(e)}"
+                    self.messages = temp_messages
+
+                    with rx.session() as session:
+                        assistant_msg = session.get(Message, assistant_id)
+                        if assistant_msg:
+                            assistant_msg.content = f"Error: {str(e)}"
+                            session.add(assistant_msg)
+                            session.commit()
+
+            finally:
+                await client.close()
+                async with self:
+                    self.processing = False
+
+        except Exception as e:
+            print(f"Error regenerating response: {str(e)}")
+            async with self:
+                self.processing = False
+
+    @rx.event(background=True)
+    async def save_edit(self):
+        """Save the current edit."""
+        async with self:
+            if self.editing_user_message_index is not None:
+                self.messages[self.editing_user_message_index].content = (
+                    self.edit_content
+                )
+
+                # Save changes to database
+                with rx.session() as session:
+                    chat = session.get(Chat, self.current_chat_id)
+                    if chat and self.editing_user_message_index < len(chat.messages):
+                        msg = chat.messages[self.editing_user_message_index]
+                        msg.content = self.edit_content
+                        session.add(msg)
+                        session.commit()
+
+                # Store the index before clearing
+                index_to_regenerate = self.editing_user_message_index
+
+                # Cancel editing first
+                yield State.cancel_editing
+
+                # Then regenerate the response using the class name
+                yield State.regenerate_response(index_to_regenerate)
+                return
+
+            elif self.editing_assistant_content_index is not None:
+                self.messages[self.editing_assistant_content_index].content = (
+                    self.edit_content
+                )
+                # Save changes to database
+                with rx.session() as session:
+                    chat = session.get(Chat, self.current_chat_id)
+                    if chat and self.editing_assistant_content_index < len(
+                        chat.messages
+                    ):
+                        msg = chat.messages[self.editing_assistant_content_index]
+                        msg.content = self.edit_content
+                        session.add(msg)
+                        session.commit()
+
+            elif self.editing_assistant_reasoning_index is not None:
+                self.messages[self.editing_assistant_reasoning_index].reasoning = (
+                    self.edit_content
+                )
+                # Save changes to database
+                with rx.session() as session:
+                    chat = session.get(Chat, self.current_chat_id)
+                    if chat and self.editing_assistant_reasoning_index < len(
+                        chat.messages
+                    ):
+                        msg = chat.messages[self.editing_assistant_reasoning_index]
+                        msg.reasoning = self.edit_content
+                        session.add(msg)
+                        session.commit()
+
+            # Cancel editing for non-user message edits
+            yield State.cancel_editing
 
     @rx.event
     def cancel_editing(self):
