@@ -23,6 +23,97 @@ class UIMessage:
     reasoning: Optional[str] = None
 
 
+def format_system_prompt(system_instructions: str, documents: list) -> str:
+    """Format the system prompt with instructions and documents.
+
+    Args:
+        system_instructions: The project's system instructions
+        documents: List of Document objects from the database
+
+    Returns:
+        Formatted system prompt string
+    """
+    # Base prompt template
+    prompt_template = """<response_guidelines>
+# Educational Approach
+- Break down complex topics
+- Build from fundamentals
+- Use concrete examples
+- Provide helpful analogies
+- Add context and background
+- Anticipate confusion points
+- Write clear explanations
+
+# Response Format
+- Use markdown formatting
+- Write in full sentences
+- Use bullets only when requested
+- Include descriptive comments
+- Create clear section headers
+- Maintain consistent style
+
+# Code Examples
+- Include detailed comments
+- Follow project conventions
+- Make code runnable
+- Refer from documents
+</response_guidelines>
+
+<identity>
+{system_instructions}
+</identity>
+
+<documents>
+{document_sections}
+</documents>"""
+
+    # Format document sections
+    doc_sections = []
+    for doc in documents:
+        doc_section = f"""<document>
+<source>{doc.name}</source>
+<document_content>
+{doc.content}
+</document_content>
+</document>"""
+        doc_sections.append(doc_section)
+
+    # Join all document sections
+    document_sections = "\n\n".join(doc_sections)
+
+    # Format the complete prompt
+    return prompt_template.format(
+        system_instructions=system_instructions, document_sections=document_sections
+    )
+
+
+def get_messages_with_system_prompt(
+    chat_messages: list, project_documents: list, system_instructions: str
+) -> list:
+    """Get formatted messages list with system prompt for API call.
+
+    Args:
+        chat_messages: List of chat messages
+        project_documents: List of project documents
+        system_instructions: Project's system instructions
+
+    Returns:
+        List of formatted messages including system prompt
+    """
+    # Create system prompt
+    system_prompt = format_system_prompt(system_instructions, project_documents)
+
+    # Create messages list with system prompt as first message
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add chat messages
+    for msg in chat_messages:
+        if msg.get("content"):  # Only add messages with content
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+    return messages
+
+
 @dataclass
 class StreamChunk:
     content: Optional[str] = None
@@ -893,12 +984,33 @@ class State(rx.State):
     edit_content: str = ""
 
     def format_messages(self) -> List[Dict[str, str]]:
-        """Format chat history for the API."""
-        return [
-            {"role": msg.role, "content": msg.content}
-            for msg in self.messages
-            if msg.content
-        ]
+        """Format chat history with system prompt for the API."""
+        # Get current project and its documents
+        with rx.session() as session:
+            # Get project with documents
+            project = session.exec(
+                select(Project)
+                .options(selectinload(Project.knowledge))
+                .where(Project.id == self.current_project_id)
+            ).first()
+
+            if not project:
+                return [
+                    {"role": msg.role, "content": msg.content}
+                    for msg in self.messages
+                    if msg.content
+                ]
+
+            # Get messages with system prompt
+            return get_messages_with_system_prompt(
+                chat_messages=[
+                    {"role": msg.role, "content": msg.content}
+                    for msg in self.messages
+                    if msg.content
+                ],
+                project_documents=project.knowledge,
+                system_instructions=project.system_instructions,
+            )
 
     @rx.event(background=True)
     async def handle_action_bar_keydown(self, keydown_character: str):
@@ -910,14 +1022,6 @@ class State(rx.State):
             ):
                 yield State.process_question
             self.previous_keydown_character = keydown_character
-
-    def format_messages(self) -> List[dict]:
-        """Format chat history for the API."""
-        return [
-            {"role": msg.role, "content": msg.content}
-            for msg in self.messages
-            if msg.content
-        ]
 
     @rx.var
     def chat_messages(self) -> List[UIMessage]:
@@ -984,11 +1088,7 @@ class State(rx.State):
                 ]
 
             # Prepare messages for API
-            messages_for_api = [
-                {"role": msg.role, "content": msg.content}
-                for msg in self.messages
-                if msg.content
-            ]
+            messages_for_api = self.format_messages()
 
         # Process with AI
         client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
@@ -1140,12 +1240,10 @@ class State(rx.State):
                     for msg in chat.messages
                 ]
 
-            # Prepare messages for API - only include messages up to user message
-            messages_for_api = [
-                {"role": msg.role, "content": msg.content}
-                for msg in self.messages[: user_message_index + 1]
-                if msg.content
-            ]
+            # Use format_messages to get messages including system prompt
+            # But only include messages up to user_message_index + 1
+            self.messages = self.messages[: user_message_index + 1]
+            messages_for_api = self.format_messages()
 
         # Process with AI
         client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
