@@ -114,6 +114,7 @@ app = rx.App(
         accent_color="gray",
         radius="large",
     ),
+    sio=sio,
 )
 
 # Add routes
