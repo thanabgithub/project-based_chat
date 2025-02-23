@@ -284,16 +284,13 @@ class State(rx.State):
             session.delete(msg)
             session.commit()
 
-    @rx.event(background=True)
+    @rx.event
     async def update_user_message(self):
-        """
-        Update an existing user message (using the new value in `question`)
-        and regenerate the assistant's answer.
-        """
+        """Update an existing user message and regenerate the assistant's answer."""
         if self.editing_user_message_index is None or not self.question.strip():
             return
 
-        # Update the user message in the DB and remove all subsequent messages.
+        # Update user message in DB and remove subsequent messages
         with rx.session() as session:
             chat = session.get(Chat, self.current_chat_id)
             if not chat or self.editing_user_message_index >= len(chat.messages):
@@ -305,72 +302,14 @@ class State(rx.State):
             session.add(user_msg)
             session.commit()
 
-            # Remove all messages after this user message.
+            # Remove all messages after this user message
             for msg in chat.messages[self.editing_user_message_index + 1 :]:
                 session.delete(msg)
             session.commit()
 
-            # Create a new assistant message as a placeholder.
-            assistant_msg = Message(role="assistant", chat_id=self.current_chat_id)
-            session.add(assistant_msg)
-            session.commit()
-            assistant_id = assistant_msg.id
-
-        # Reset editing state for the user message.
-        self.editing_user_message_index = None
-        self.question = ""
-        self.processing = True
-
-        # Call your AI API to regenerate the assistant answer.
-        from app.state import AsyncOpenRouterAI  # adjust if needed
-
-        client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
-        messages = self.format_messages(
-            user_msg.content
-        )  # Format the conversation using the updated user message.
-        try:
-            processor = await client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                stream=True,
-                include_reasoning=True,
-            )
-            answer = ""
-            reasoning = ""
-            async for chunk in processor:
-                if not self.processing:
-                    await processor.close()
-                    break
-                with rx.session() as session:
-                    updated_msg = session.get(Message, assistant_id)
-                    if chunk.reasoning:
-                        reasoning += chunk.reasoning
-                        updated_msg.reasoning = reasoning
-                    if chunk.content:
-                        answer += chunk.content
-                        updated_msg.content = answer
-                    session.add(updated_msg)
-                    session.commit()
-            with rx.session() as session:
-                chat = session.get(Chat, self.current_chat_id)
-                if chat:
-                    chat.updated_at = datetime.now(timezone.utc)
-                    session.add(chat)
-                    session.commit()
-        except Exception as e:
-            with rx.session() as session:
-                assistant_msg = session.get(Message, assistant_id)
-                assistant_msg.content = f"Error: {str(e)}"
-                session.add(assistant_msg)
-                session.commit()
-        finally:
-            async with self:
-                self.processing = False
-            yield
-
     @rx.event
     def update_assistant_content(self):
-        """Update the assistant's content message with the new value in `answer`."""
+        """Update the assistant's content message."""
         if self.editing_assistant_content_index is None or not self.answer.strip():
             return
         with rx.session() as session:
@@ -383,8 +322,6 @@ class State(rx.State):
             msg.content = self.answer
             session.add(msg)
             session.commit()
-        self.editing_assistant_content_index = None
-        self.answer = ""
 
     @rx.event
     def update_assistant_reasoning(self):
@@ -1098,11 +1035,21 @@ class State(rx.State):
 
     @rx.event
     def delete_message(self, index: int):
-        """Delete a message and its response if it's a user message."""
-        if index < len(self.messages):
-            if self.messages[index].role == "user" and index + 1 < len(self.messages):
-                self.messages.pop(index + 1)
-            self.messages.pop(index)
+        """Delete a specific message from the current chat.
+        If deleting a user message, also delete the following assistant message (if any).
+        """
+        if self.current_chat_id is None:
+            return
+        with rx.session() as session:
+            chat = session.get(Chat, self.current_chat_id)
+            if not chat or index < 0 or index >= len(chat.messages):
+                return
+            msg = chat.messages[index]
+            # If deleting user message, also delete the assistant's response
+            if msg.role == "user" and index + 1 < len(chat.messages):
+                session.delete(chat.messages[index + 1])
+            session.delete(msg)
+            session.commit()
 
     @rx.event
     def start_editing(self, index: int, field: str):
