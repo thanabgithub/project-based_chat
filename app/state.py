@@ -1195,10 +1195,7 @@ class State(rx.State):
 
     @rx.event(background=True)
     async def regenerate_response(self, user_message_index: int):
-        """Regenerate the AI response for a user message after editing.
-        Args:
-            user_message_index: Index of the edited user message
-        """
+        """Regenerate the AI response for a user message after editing."""
         assistant_id = None
 
         async with self:
@@ -1232,35 +1229,39 @@ class State(rx.State):
                 session.commit()
                 assistant_id = assistant_msg.id
 
-                # Load current state of messages
+                # Load current state of messages plus the new assistant message
                 self.messages = [
                     UIMessage(
                         role=msg.role, content=msg.content, reasoning=msg.reasoning
                     )
                     for msg in chat.messages
-                ]
+                ] + [UIMessage(role="assistant", content="", reasoning="")]
 
-            # Use format_messages to get messages including system prompt
-            # But only include messages up to user_message_index + 1
-            self.messages = self.messages[: user_message_index + 1]
+            # Create a temporary message list for the API that only includes up to user_message_index
+            temp_messages = self.messages[: user_message_index + 1]
+
+            # Temporarily set self.messages to get correct format_messages output
+            original_messages = self.messages.copy()
+            self.messages = temp_messages
             messages_for_api = self.format_messages()
+            # Restore original messages to maintain UI state
+            self.messages = original_messages
 
-        # Process with AI
-        client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
+            # Process with AI
+            client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
 
-        try:
-            processor = await client.chat.completions.create(
-                model=self.model,
-                messages=messages_for_api,
-                stream=True,
-                include_reasoning=True,
-            )
+            try:
+                processor = await client.chat.completions.create(
+                    model=self.model,
+                    messages=messages_for_api,
+                    stream=True,
+                    include_reasoning=True,
+                )
 
-            async for chunk in processor:
-                if not self.processing:
-                    break
+                async for chunk in processor:
+                    if not self.processing:
+                        break
 
-                async with self:
                     if chunk.content:
                         answer = answer + chunk.content if answer else chunk.content
                     if chunk.reasoning:
@@ -1277,8 +1278,7 @@ class State(rx.State):
                         messages[-1].reasoning = reasoning
                         self.messages = messages
 
-            # After streaming completes, update database
-            async with self:
+                # After streaming completes, update database
                 with rx.session() as session:
                     assistant_msg = session.get(Message, assistant_id)
                     if assistant_msg:
@@ -1303,8 +1303,7 @@ class State(rx.State):
                             for msg in chat.messages
                         ]
 
-        except Exception as e:
-            async with self:
+            except Exception as e:
                 error_message = f"Error: {str(e)}"
                 messages = self.messages[:]
                 if messages:
@@ -1318,9 +1317,8 @@ class State(rx.State):
                         session.add(assistant_msg)
                         session.commit()
 
-        finally:
-            await client.close()
-            async with self:
+            finally:
+                await client.close()
                 self.processing = False
 
     @rx.event(background=True)
