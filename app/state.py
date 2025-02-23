@@ -1195,9 +1195,14 @@ class State(rx.State):
 
     @rx.event(background=True)
     async def regenerate_response(self, user_message_index: int):
-        """Regenerate the AI response for a user message after editing."""
+        """
+        Regenerate the AI response for a user message after editing it.
+        Removes all messages after the specified user message,
+        then streams a new assistant response into the chat.
+        """
         assistant_id = None
 
+        # First lock and do initial setup in the state.
         async with self:
             if self.current_chat_id is None:
                 return
@@ -1206,7 +1211,7 @@ class State(rx.State):
             answer = ""
             reasoning = ""
 
-            # Get messages and verify index
+            # Grab DB objects and verify we have the correct chat and user message
             with rx.session() as session:
                 chat = session.get(Chat, self.current_chat_id)
                 if not chat:
@@ -1215,7 +1220,7 @@ class State(rx.State):
                 # Get messages up to and including the user message
                 messages_before = chat.messages[: user_message_index + 1]
 
-                # Verify the message at index is a user message
+                # The target for regeneration must be a user message
                 if not messages_before or messages_before[-1].role != "user":
                     return
 
@@ -1223,45 +1228,47 @@ class State(rx.State):
                 for msg in chat.messages[user_message_index + 1 :]:
                     session.delete(msg)
 
-                # Create new assistant message
+                # Create a new assistant message placeholder
                 assistant_msg = Message(role="assistant", chat_id=self.current_chat_id)
                 session.add(assistant_msg)
                 session.commit()
                 assistant_id = assistant_msg.id
 
-                # Load current state of messages plus the new assistant message
+                # Load current state of messages (including the new placeholder)
                 self.messages = [
-                    UIMessage(
-                        role=msg.role, content=msg.content, reasoning=msg.reasoning
-                    )
-                    for msg in chat.messages
+                    UIMessage(role=m.role, content=m.content, reasoning=m.reasoning)
+                    for m in chat.messages
                 ] + [UIMessage(role="assistant", content="", reasoning="")]
 
-            # Create a temporary message list for the API that only includes up to user_message_index
+            # Create a temp slice of messages for the API (only up to and including the user message)
             temp_messages = self.messages[: user_message_index + 1]
 
-            # Temporarily set self.messages to get correct format_messages output
+            # Temporarily overwrite self.messages to run them through format_messages
             original_messages = self.messages.copy()
             self.messages = temp_messages
             messages_for_api = self.format_messages()
-            # Restore original messages to maintain UI state
-            self.messages = original_messages
+            self.messages = original_messages  # restore
 
-            # Process with AI
-            client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
+        # Prepare the streaming client
+        client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
 
-            try:
-                processor = await client.chat.completions.create(
-                    model=self.model,
-                    messages=messages_for_api,
-                    stream=True,
-                    include_reasoning=True,
-                )
+        try:
+            # Start streaming the response
+            processor = await client.chat.completions.create(
+                model=self.model,
+                messages=messages_for_api,
+                stream=True,
+                include_reasoning=True,
+            )
 
-                async for chunk in processor:
-                    if not self.processing:
-                        break
+            # Stream the chunks back into our UI
+            async for chunk in processor:
+                # Stop if processing was canceled
+                if not self.processing:
+                    break
 
+                # For each chunk, lock state to push partial updates
+                async with self:
                     if chunk.content:
                         answer = answer + chunk.content if answer else chunk.content
                     if chunk.reasoning:
@@ -1271,54 +1278,57 @@ class State(rx.State):
                             else chunk.reasoning
                         )
 
-                    # Update last message with current progress
+                    # Update the last assistant message in the UI
                     messages = self.messages[:]
                     if messages:
                         messages[-1].content = answer
                         messages[-1].reasoning = reasoning
                         self.messages = messages
 
-                # After streaming completes, update database
-                with rx.session() as session:
-                    assistant_msg = session.get(Message, assistant_id)
-                    if assistant_msg:
-                        assistant_msg.content = answer
-                        assistant_msg.reasoning = reasoning
-                        session.add(assistant_msg)
+            # Once the stream finishes, save the final answer & reasoning to the database
+            with rx.session() as session:
+                assistant_msg = session.get(Message, assistant_id)
+                if assistant_msg:
+                    assistant_msg.content = answer
+                    assistant_msg.reasoning = reasoning
+                    session.add(assistant_msg)
 
-                        # Update chat timestamp
-                        chat = session.get(Chat, self.current_chat_id)
-                        if chat:
-                            chat.updated_at = datetime.now(timezone.utc)
-                            session.add(chat)
-                        session.commit()
+                    # Update the chat's last modified timestamp
+                    chat = session.get(Chat, self.current_chat_id)
+                    if chat:
+                        chat.updated_at = datetime.now(timezone.utc)
+                        session.add(chat)
 
-                        # Refresh messages from database
+                    session.commit()
+                    async with self:
+                        # Reload messages from DB to keep them in sync
                         self.messages = [
                             UIMessage(
-                                role=msg.role,
-                                content=msg.content,
-                                reasoning=msg.reasoning,
+                                role=m.role, content=m.content, reasoning=m.reasoning
                             )
-                            for msg in chat.messages
+                            for m in chat.messages
                         ]
 
-            except Exception as e:
-                error_message = f"Error: {str(e)}"
+        except Exception as e:
+            # If there's an error, record it in the UI and database
+            error_message = f"Error: {str(e)}"
+            async with self:
                 messages = self.messages[:]
                 if messages:
                     messages[-1].content = error_message
                     self.messages = messages
 
-                with rx.session() as session:
-                    assistant_msg = session.get(Message, assistant_id)
-                    if assistant_msg:
-                        assistant_msg.content = error_message
-                        session.add(assistant_msg)
-                        session.commit()
+            with rx.session() as session:
+                assistant_msg = session.get(Message, assistant_id)
+                if assistant_msg:
+                    assistant_msg.content = error_message
+                    session.add(assistant_msg)
+                    session.commit()
 
-            finally:
-                await client.close()
+        finally:
+            # Clean up regardless of success or error
+            await client.close()
+            async with self:
                 self.processing = False
 
     @rx.event(background=True)
