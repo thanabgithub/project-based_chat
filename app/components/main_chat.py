@@ -84,6 +84,33 @@ chat_style = dict(
 )
 
 
+def copy_button(code: str) -> rx.Component:
+    """Create a copy button for code blocks."""
+    return rx.button(
+        rx.icon("copy", size=20),
+        on_click=rx.set_clipboard(code),
+        position="absolute",
+        top="0.5em",
+        right="0",
+        background_color="transparent",
+        _hover={"background_color": "rgba(0,0,0,0.1)"},
+    )
+
+
+def code_block_with_copy(code: str, **props) -> rx.Component:
+    """Create a code block with a copy button."""
+    return rx.box(
+        rx.code_block(code, theme=rx.code_block.themes.dark, margin_y="1em", **props),
+        copy_button(code),
+        position="relative",
+    )
+
+
+content_component_map = {
+    "codeblock": code_block_with_copy,
+}
+
+
 def editing_message_input(index: int) -> rx.Component:
     """Input component for editing messages."""
     return rx.box(
@@ -199,6 +226,7 @@ def assistant_message(msg: Message, index: int) -> rx.Component:
                     rx.box(
                         rx.markdown(
                             msg.content,
+                            component_map=content_component_map,
                             style=answer_style,
                         ),
                         width="100%",
