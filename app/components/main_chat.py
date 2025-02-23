@@ -97,6 +97,20 @@ def editing_message_input(index: int) -> rx.Component:
                         style=input_style,
                     ),
                     rx.hstack(
+                        rx.select(
+                            [
+                                "mistralai/codestral-2501",
+                                "aion-labs/aion-1.0",
+                                "deepseek/deepseek-r1",
+                                "openai/gpt-4o-mini",
+                                "google/gemini-2.0-flash-thinking-exp:free",
+                            ],
+                            placeholder=State.model,
+                            disabled=State.processing,
+                            on_change=State.set_model,
+                            style=select_style,
+                        ),
+                        rx.spacer(),
                         rx.button(
                             "Cancel",
                             on_click=State.cancel_editing,
