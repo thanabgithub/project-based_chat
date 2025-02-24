@@ -1234,17 +1234,18 @@ class State(rx.State):
                 session.commit()
                 assistant_id = assistant_msg.id
 
-                # Load current state of messages (including the new placeholder)
+                # Load current state of messages
                 self.messages = [
                     UIMessage(role=m.role, content=m.content, reasoning=m.reasoning)
                     for m in chat.messages
-                ] + [UIMessage(role="assistant", content="", reasoning="")]
+                ]
 
-            # Create a temp slice of messages for the API (only up to and including the user message)
-            messages_until_edit = self.messages[: user_message_index + 1]
+            messages_for_api = self.format_messages(self.messages)
 
-            # Temporarily overwrite self.messages to run them through format_messages
-            messages_for_api = self.format_messages(messages_until_edit)
+            # Include the new placeholder
+            self.messages = self.messages + [
+                UIMessage(role="assistant", content="", reasoning="")
+            ]
 
         # Prepare the streaming client
         client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
