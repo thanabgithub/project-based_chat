@@ -252,17 +252,72 @@ def assistant_message(msg: Message, index: int) -> rx.Component:
     )
 
 
-def message(msg: Message, index: int) -> rx.Component:
-    """Render a message with proper editing states."""
+def assistant_reasoning_section(msg: Message, index: int) -> rx.Component:
     return rx.cond(
-        (State.editing_user_message_index == index)
-        | (State.editing_assistant_content_index == index)
-        | (State.editing_assistant_reasoning_index == index),
+        State.editing_assistant_reasoning_index == index,
         editing_message_input(index),
         rx.cond(
-            msg.role == "user",
+            msg.reasoning != None,
+            rx.context_menu.root(
+                rx.context_menu.trigger(
+                    rx.blockquote(
+                        rx.markdown(msg.reasoning),
+                        width="100%",
+                        size="1",
+                    )
+                ),
+                rx.context_menu.content(
+                    rx.context_menu.item(
+                        "Edit Reasoning",
+                        on_click=lambda: State.start_editing(index, "reasoning"),
+                    )
+                ),
+            ),
+        ),
+    )
+
+
+def assistant_content_section(msg: Message, index: int) -> rx.Component:
+    return rx.cond(
+        State.editing_assistant_content_index == index,
+        editing_message_input(index),
+        rx.cond(
+            msg.content != None,
+            rx.context_menu.root(
+                rx.context_menu.trigger(
+                    rx.box(
+                        rx.markdown(
+                            msg.content,
+                            component_map=content_component_map,
+                            style=answer_style,
+                        ),
+                        width="100%",
+                    )
+                ),
+                rx.context_menu.content(
+                    rx.context_menu.item(
+                        "Edit Content",
+                        on_click=lambda: State.start_editing(index, "content"),
+                    )
+                ),
+            ),
+        ),
+    )
+
+
+def message(msg: Message, index: int) -> rx.Component:
+    return rx.cond(
+        msg.role == "user",
+        rx.cond(
+            State.editing_user_message_index == index,
+            editing_message_input(index),
             user_message(msg, index),
-            assistant_message(msg, index),
+        ),
+        rx.vstack(
+            assistant_reasoning_section(msg, index),
+            assistant_content_section(msg, index),
+            align="start",
+            width="100%",
         ),
     )
 
