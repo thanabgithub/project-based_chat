@@ -115,6 +115,10 @@ app = rx.App(
         radius="large",
     ),
     sio=sio,
+    style={
+        "height": "100vh",
+        "overflow": "hidden",
+    },
 )
 
 # Add routes
