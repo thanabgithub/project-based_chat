@@ -99,10 +99,13 @@ def copy_button(code: str) -> rx.Component:
 def code_block_with_copy(code: str, **props) -> rx.Component:
     """Create a code block with a copy button."""
     return rx.box(
-        rx.code_block(code, margin_y="1em", **props),
+        rx.code_block(
+            code,
+            margin_y="1em",
+            **props,
+        ),
         copy_button(code),
         position="relative",
-        background_color="white",
     )
 
 
