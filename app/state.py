@@ -983,7 +983,7 @@ class State(rx.State):
     editing_assistant_reasoning_index: Optional[int] = None
     edit_content: str = ""
 
-    def format_messages(self) -> List[Dict[str, str]]:
+    def format_messages(self, messages) -> List[Dict[str, str]]:
         """Format chat history with system prompt for the API."""
         # Get current project and its documents
         with rx.session() as session:
@@ -997,7 +997,7 @@ class State(rx.State):
             if not project:
                 return [
                     {"role": msg.role, "content": msg.content}
-                    for msg in self.messages
+                    for msg in messages
                     if msg.content
                 ]
 
@@ -1005,7 +1005,7 @@ class State(rx.State):
             return get_messages_with_system_prompt(
                 chat_messages=[
                     {"role": msg.role, "content": msg.content}
-                    for msg in self.messages
+                    for msg in messages
                     if msg.content
                 ],
                 project_documents=project.knowledge,
@@ -1088,7 +1088,7 @@ class State(rx.State):
                 ]
 
             # Prepare messages for API
-            messages_for_api = self.format_messages()
+            messages_for_api = self.format_messages(self.messages)
 
         # Process with AI
         client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
@@ -1241,13 +1241,10 @@ class State(rx.State):
                 ] + [UIMessage(role="assistant", content="", reasoning="")]
 
             # Create a temp slice of messages for the API (only up to and including the user message)
-            temp_messages = self.messages[: user_message_index + 1]
+            messages_until_edit = self.messages[: user_message_index + 1]
 
             # Temporarily overwrite self.messages to run them through format_messages
-            original_messages = self.messages.copy()
-            self.messages = temp_messages
-            messages_for_api = self.format_messages()
-            self.messages = original_messages  # restore
+            messages_for_api = self.format_messages(messages_until_edit)
 
         # Prepare the streaming client
         client = AsyncOpenRouterAI(api_key=os.getenv("OPENROUTER_API_KEY"))
