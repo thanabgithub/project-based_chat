@@ -7,18 +7,29 @@ from app.state import State, Message
 class ActionBarState(rx.State):
     """State for managing action bar behavior."""
 
-    @rx.event
-    def auto_resize_textarea(self):
+    @rx.event(background=True)
+    async def auto_resize_textarea(self):
         """Simple and efficient textarea auto-resize."""
-        return rx.call_script(
+        yield rx.call_script(
             """
             const textarea = document.getElementById('input-textarea--action-bar');
             if (textarea) {
-                // Reset height to auto to get proper scrollHeight
                 textarea.style.height = 'auto';
-                // Set new height based on scrollHeight
-                const maxHeight = window.innerHeight * 0.8;
-                textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+                textarea.style.height = textarea.scrollHeight + 'px';
+            }
+            """
+        )
+
+    @rx.event(background=True)
+    async def auto_resize_edit_textarea(self):
+        """Auto-resize for the editing textarea.
+        This ensures the input box height matches the original content height."""
+        yield rx.call_script(
+            """
+            const textarea = document.getElementById('input-textarea--editing');
+            if (textarea) {
+                textarea.style.height = 'auto';
+                textarea.style.height = textarea.scrollHeight + 'px';
             }
             """
         )
@@ -142,10 +153,13 @@ def editing_message_input(index: int) -> rx.Component:
             rx.form(
                 rx.vstack(
                     rx.text_area(
+                        id="input-textarea--editing",
                         value=State.edit_content,
                         placeholder="Edit your message...",
                         on_change=State.set_edit_content,
                         style=input_style,
+                        on_focus=[ActionBarState.auto_resize_edit_textarea],
+                        on_key_down=[ActionBarState.auto_resize_edit_textarea],
                     ),
                     rx.hstack(
                         rx.select(
