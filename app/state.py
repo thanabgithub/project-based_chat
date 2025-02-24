@@ -1020,6 +1020,8 @@ class State(rx.State):
                 self.previous_keydown_character == "Control"
                 and keydown_character == "Enter"
             ):
+                # When chaining events in Reflex, you should reference the event handler via the state class (State) rather than self
+                # https://reflex.dev/docs/events/chaining-events/
                 yield State.process_question
             self.previous_keydown_character = keydown_character
 
@@ -1351,9 +1353,13 @@ class State(rx.State):
                 index_to_regenerate = self.editing_user_message_index
 
                 # Cancel editing first
+                # When chaining events in Reflex, you should reference the event handler via the state class (State) rather than self
+                # https://reflex.dev/docs/events/chaining-events/
                 yield State.cancel_editing
 
                 # Then regenerate the response using the class name
+                # When chaining events in Reflex, you should reference the event handler via the state class (State) rather than self
+                # https://reflex.dev/docs/events/chaining-events/
                 yield State.regenerate_response(index_to_regenerate)
                 return
 
@@ -1388,6 +1394,8 @@ class State(rx.State):
                         session.commit()
 
             # Cancel editing for non-user message edits
+            # When chaining events in Reflex, you should reference the event handler via the state class (State) rather than self
+            # https://reflex.dev/docs/events/chaining-events/
             yield State.cancel_editing
 
     @rx.event
