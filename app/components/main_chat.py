@@ -340,11 +340,23 @@ def action_bar() -> rx.Component:
 def chat_messages() -> rx.Component:
     """Render all chat messages."""
     return rx.vstack(
+        rx.cond(
+            ~State.messages.length(),
+            rx.heading(
+                "お手伝いできることはありますか?",
+                size="8",
+                color="black",
+                text_align="center",
+                margin_top="20%",
+                margin_bottom="5%",
+            ),
+            rx.box(),
+        ),
         rx.foreach(
             State.messages,
             message,
         ),
-        align="start",
+        align="center",
         width="100%",
         padding_bottom="5em",
     )
