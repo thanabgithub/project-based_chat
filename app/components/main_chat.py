@@ -3,6 +3,27 @@
 import reflex as rx
 from app.state import State, Message
 
+
+class ActionBarState(rx.State):
+    """State for managing action bar behavior."""
+
+    @rx.event
+    def auto_resize_textarea(self):
+        """Simple and efficient textarea auto-resize."""
+        return rx.call_script(
+            """
+            const textarea = document.getElementById('input-textarea--action-bar');
+            if (textarea) {
+                // Reset height to auto to get proper scrollHeight
+                textarea.style.height = 'auto';
+                // Set new height based on scrollHeight
+                const maxHeight = window.innerHeight * 0.8;
+                textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+            }
+            """
+        )
+
+
 # Style Definitions
 # Common styles with dict syntax
 shadow = "rgba(0, 0, 0, 0.15) 0px 2px 8px"
@@ -326,7 +347,7 @@ def message(msg: Message, index: int) -> rx.Component:
 
 
 def action_bar() -> rx.Component:
-    """Input bar for sending messages."""
+    """Input bar for sending messages with auto-resize functionality."""
     return rx.cond(
         (State.editing_user_message_index != None)
         | (State.editing_assistant_content_index != None)
@@ -340,9 +361,14 @@ def action_bar() -> rx.Component:
                             id="input-textarea--action-bar",
                             value=State.current_question,
                             placeholder="Ask me anything...",
-                            on_change=State.set_current_question,
+                            on_change=[
+                                State.set_current_question,
+                            ],
                             style=input_style,
-                            on_key_down=State.handle_action_bar_keydown,
+                            on_key_down=[
+                                State.handle_action_bar_keydown,
+                                ActionBarState.auto_resize_textarea,
+                            ],
                         ),
                         rx.hstack(
                             rx.select(
